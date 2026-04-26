@@ -1,0 +1,46 @@
+name: book_reader
+description: A clean, minimal book reader for Android.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # Storage
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.0
+
+  # Files & permissions
+  file_picker: ^8.1.0
+  permission_handler: ^11.3.1
+
+  # Format readers
+  epub_view: ^3.2.0          # EPUB rendering (built on epubx)
+  pdfx: ^2.6.0               # PDF rendering, free
+  
+  # UI
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.0.10
+  wakelock_plus: ^1.2.5
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
