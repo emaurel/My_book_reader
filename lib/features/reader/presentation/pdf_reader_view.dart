@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-import '../../library/data/book_repository.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
+import '../providers/reader_controls_provider.dart';
 import '../providers/reader_settings_provider.dart';
 
 class PdfReaderView extends ConsumerStatefulWidget {
@@ -57,6 +58,27 @@ class _PdfReaderViewState extends ConsumerState<PdfReaderView> {
 
   void _onDocumentLoaded(PdfDocument doc) {
     setState(() => _totalPages = doc.pagesCount);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(readerControlsProvider.notifier).state = ReaderControls(
+        goPrev: _goPrev,
+        goNext: _goNext,
+      );
+    });
+  }
+
+  void _goPrev() {
+    _controller.previousPage(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _goNext() {
+    _controller.nextPage(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
@@ -84,7 +106,6 @@ class _PdfReaderViewState extends ConsumerState<PdfReaderView> {
             backgroundDecoration: BoxDecoration(
               color: settings.theme.background,
             ),
-            loaderSwitchDuration: const Duration(milliseconds: 200),
             builders: PdfViewBuilders<DefaultBuilderOptions>(
               options: const DefaultBuilderOptions(),
               documentLoaderBuilder: (_) =>

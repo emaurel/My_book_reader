@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'book_reader.db';
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
 
   Database? _db;
 
@@ -24,6 +24,7 @@ class DatabaseHelper {
       path,
       version: _dbVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -40,7 +41,10 @@ class DatabaseHelper {
         added_at INTEGER NOT NULL,
         last_opened_at INTEGER,
         progress REAL NOT NULL DEFAULT 0,
-        position TEXT
+        position TEXT,
+        description TEXT,
+        series TEXT,
+        series_number REAL
       )
     ''');
 
@@ -48,5 +52,13 @@ class DatabaseHelper {
     await db.execute(
       'CREATE INDEX idx_books_last_opened ON books(last_opened_at DESC)',
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE books ADD COLUMN description TEXT');
+      await db.execute('ALTER TABLE books ADD COLUMN series TEXT');
+      await db.execute('ALTER TABLE books ADD COLUMN series_number REAL');
+    }
   }
 }

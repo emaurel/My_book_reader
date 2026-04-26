@@ -3,7 +3,8 @@ import 'dart:convert';
 enum BookFormat {
   epub,
   pdf,
-  txt;
+  txt,
+  azw;
 
   static BookFormat? fromExtension(String ext) {
     switch (ext.toLowerCase().replaceAll('.', '')) {
@@ -13,6 +14,10 @@ enum BookFormat {
         return BookFormat.pdf;
       case 'txt':
         return BookFormat.txt;
+      case 'azw':
+      case 'azw3':
+      case 'mobi':
+        return BookFormat.azw;
       default:
         return null;
     }
@@ -32,6 +37,9 @@ class Book {
     this.lastOpenedAt,
     this.progress = 0.0,
     this.position,
+    this.description,
+    this.series,
+    this.seriesNumber,
   });
 
   final int? id;
@@ -43,8 +51,11 @@ class Book {
   final int? fileSize;
   final DateTime addedAt;
   final DateTime? lastOpenedAt;
-  final double progress; // 0.0 - 1.0
-  final Map<String, dynamic>? position; // format-specific (page, cfi, offset)
+  final double progress;
+  final Map<String, dynamic>? position;
+  final String? description;
+  final String? series;
+  final double? seriesNumber;
 
   Book copyWith({
     int? id,
@@ -58,6 +69,9 @@ class Book {
     DateTime? lastOpenedAt,
     double? progress,
     Map<String, dynamic>? position,
+    String? description,
+    String? series,
+    double? seriesNumber,
   }) {
     return Book(
       id: id ?? this.id,
@@ -71,6 +85,9 @@ class Book {
       lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
       progress: progress ?? this.progress,
       position: position ?? this.position,
+      description: description ?? this.description,
+      series: series ?? this.series,
+      seriesNumber: seriesNumber ?? this.seriesNumber,
     );
   }
 
@@ -86,6 +103,9 @@ class Book {
         'last_opened_at': lastOpenedAt?.millisecondsSinceEpoch,
         'progress': progress,
         'position': position == null ? null : jsonEncode(position),
+        'description': description,
+        'series': series,
+        'series_number': seriesNumber,
       };
 
   factory Book.fromMap(Map<String, dynamic> m) => Book(
@@ -108,5 +128,8 @@ class Book {
         position: m['position'] == null
             ? null
             : jsonDecode(m['position'] as String) as Map<String, dynamic>,
+        description: m['description'] as String?,
+        series: m['series'] as String?,
+        seriesNumber: (m['series_number'] as num?)?.toDouble(),
       );
 }

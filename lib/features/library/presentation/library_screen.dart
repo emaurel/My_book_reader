@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../domain/book.dart';
 import '../providers/library_provider.dart';
 import 'widgets/book_grid_item.dart';
+import 'widgets/book_info_sheet.dart';
 
 class LibraryScreen extends ConsumerWidget {
   const LibraryScreen({super.key});
@@ -27,6 +28,16 @@ class LibraryScreen extends ConsumerWidget {
             itemBuilder: (_) => LibrarySort.values
                 .map((s) => PopupMenuItem(value: s, child: Text(s.label)))
                 .toList(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.travel_explore),
+            tooltip: 'Scan device for books',
+            onPressed: () => _onScan(context, ref),
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh covers & metadata',
+            onPressed: () => _onRefreshMetadata(context, ref),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -95,6 +106,94 @@ class LibraryScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _onRefreshMetadata(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      const SnackBar(
+        duration: Duration(minutes: 5),
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text('Refreshing covers & metadata…'),
+          ],
+        ),
+      ),
+    );
+    try {
+      final n =
+          await ref.read(libraryProvider.notifier).refreshAllMetadata();
+      if (!context.mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            n == 0
+                ? 'All books already have metadata.'
+                : 'Refreshed $n book${n == 1 ? '' : 's'}.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+    }
+  }
+
+  void _showBookInfo(BuildContext context, Book book) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => BookInfoSheet(book: book),
+    );
+  }
+
+  Future<void> _onScan(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      const SnackBar(
+        duration: Duration(minutes: 5),
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text('Scanning device for books…'),
+          ],
+        ),
+      ),
+    );
+    try {
+      final added = await ref.read(libraryProvider.notifier).scanDevice();
+      if (!context.mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            added == 0
+                ? 'No new books found.'
+                : 'Found and added $added book${added == 1 ? '' : 's'}.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+    }
+  }
+
   void _showBookActions(BuildContext context, WidgetRef ref, Book book) {
     showModalBottomSheet<void>(
       context: context,
@@ -117,6 +216,14 @@ class LibraryScreen extends ConsumerWidget {
               onTap: () {
                 Navigator.pop(sheetContext);
                 context.push('/read/${book.id}');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Book info'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showBookInfo(context, book);
               },
             ),
             ListTile(

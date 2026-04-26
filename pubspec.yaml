@@ -29,8 +29,10 @@ dependencies:
   permission_handler: ^11.3.1
 
   # Format readers
-  epub_view: ^3.2.0          # EPUB rendering (built on epubx)
+  epubx: ^4.0.0              # EPUB parsing (chapters + metadata + cover)
   pdfx: ^2.6.0               # PDF rendering, free
+  image: ^3.3.0              # Cover image encoding (pinned for epubx compat)
+  webview_flutter: ^4.10.0   # EPUB paginated rendering via CSS columns
   
   # UI
   google_fonts: ^6.2.1

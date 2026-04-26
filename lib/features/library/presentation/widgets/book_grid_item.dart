@@ -44,15 +44,6 @@ class BookGridItem extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            if (book.author != null && book.author!.isNotEmpty)
-              Text(
-                book.author!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
             if (book.progress > 0) ...[
               const SizedBox(height: 4),
               ClipRRect(
@@ -98,7 +89,6 @@ class _Placeholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final palette = _paletteFor(book.title);
     return Container(
       decoration: BoxDecoration(
@@ -108,38 +98,10 @@ class _Placeholder extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
       ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _formatBadge(book),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.85),
-              letterSpacing: 1.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            book.title,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              height: 1.15,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
-  String _formatBadge(Book b) => b.format.name.toUpperCase();
-
   static List<Color> _paletteFor(String seed) {
-    // Deterministic palette per title so a book always looks the same.
     final palettes = <List<Color>>[
       [const Color(0xFF6750A4), const Color(0xFF9A82DB)],
       [const Color(0xFF1F6FEB), const Color(0xFF58A6FF)],

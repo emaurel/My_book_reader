@@ -6,9 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-import '../../library/data/book_repository.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
+import '../providers/reader_controls_provider.dart';
 import '../providers/reader_settings_provider.dart';
 
 /// Paginated TXT viewer. The full text is loaded once, then split into
@@ -94,6 +95,32 @@ class _TxtReaderViewState extends ConsumerState<TxtReaderView> {
       _pageController?.dispose();
       _pageController = PageController(initialPage: initialPage);
     });
+    _registerControls();
+  }
+
+  void _registerControls() {
+    ref.read(readerControlsProvider.notifier).state = ReaderControls(
+      goPrev: _goPrev,
+      goNext: _goNext,
+    );
+  }
+
+  void _goPrev() {
+    final c = _pageController;
+    if (c == null || !c.hasClients) return;
+    c.previousPage(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _goNext() {
+    final c = _pageController;
+    if (c == null || !c.hasClients) return;
+    c.nextPage(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   int _initialPage(int total) {

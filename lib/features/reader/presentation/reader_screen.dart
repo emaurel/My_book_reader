@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
+import '../providers/reader_controls_provider.dart';
 import '../providers/reader_settings_provider.dart';
 import 'widgets/reader_settings_sheet.dart';
+import 'azw_reader_view.dart';
 import 'epub_reader_view.dart';
 import 'pdf_reader_view.dart';
 import 'txt_reader_view.dart';
@@ -52,6 +55,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   void _toggleChrome() => setState(() => _chromeVisible = !_chromeVisible);
 
+  void _onTapUp(TapUpDetails details) {
+    final width = MediaQuery.sizeOf(context).width;
+    final x = details.globalPosition.dx;
+    final controls = ref.read(readerControlsProvider);
+
+    if (x < width * 0.3) {
+      controls.goPrev?.call();
+    } else if (x > width * 0.7) {
+      controls.goNext?.call();
+    } else {
+      _toggleChrome();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(readerSettingsProvider);
@@ -97,7 +114,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           : null,
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTap: _toggleChrome,
+        onTapUp: _onTapUp,
         child: _buildViewer(),
       ),
     );
@@ -107,11 +124,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final book = _book!;
     switch (book.format) {
       case BookFormat.epub:
-        return EpubReaderView(book: book);
+        return EpubReaderView(book: book, onMenuTap: _toggleChrome);
       case BookFormat.pdf:
         return PdfReaderView(book: book);
       case BookFormat.txt:
         return TxtReaderView(book: book);
+      case BookFormat.azw:
+        return AzwReaderView(book: book);
     }
   }
 

@@ -21,7 +21,7 @@ class ImportedFile {
 }
 
 class FileImporter {
-  static const _allowedExtensions = ['epub', 'pdf', 'txt'];
+  static const _allowedExtensions = ['epub', 'pdf', 'txt', 'azw', 'azw3', 'mobi'];
 
   /// Opens the file picker and copies selected books into app-private storage
   /// (so they survive across permission changes and aren't subject to scoped
