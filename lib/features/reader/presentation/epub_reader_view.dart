@@ -12,6 +12,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../providers/reader_controls_provider.dart';
+import '../providers/reader_progress_provider.dart';
 import '../providers/reader_settings_provider.dart';
 
 /// EPUB viewer that renders chapter HTML inside a WebView using CSS multi-column
@@ -127,6 +128,7 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
     final padding = s.horizontalPadding;
     final body = _sanitize(chapterHtml);
 
+    final gap = padding * 2;
     return '''
 <!DOCTYPE html>
 <html>
@@ -134,20 +136,28 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
   * { box-sizing: border-box; }
-  html { margin: 0; padding: 0; height: 100%; }
-  body {
+  html, body {
     margin: 0;
-    padding: 24px ${padding}px;
-    color: $fg;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
     background: $bg;
+    color: $fg;
+  }
+  body {
+    /* Padding sets the left margin of page 1 and the right margin of the
+       last page; column-gap (= 2 * padding) renders as the right margin of
+       page N + the left margin of page N+1. column-width is sized so that
+       column-width + column-gap == 100vw, keeping scroll-unit aligned to
+       window.innerWidth and preventing per-page drift. */
+    padding: 56px ${padding}px 24px;
     font-family: '${s.fontFamily}', Georgia, serif;
     font-size: ${s.fontSize}px;
     line-height: ${s.lineHeight};
-    column-width: 100vw;
-    column-gap: 0;
+    column-width: calc(100vw - ${gap}px);
+    column-gap: ${gap}px;
     column-fill: auto;
-    height: 100vh;
-    overflow: hidden;
     -webkit-user-select: none;
     user-select: none;
   }
@@ -232,15 +242,24 @@ $body
   }
 
   void _saveProgress() {
-    if (widget.book.id == null || _chapters.isEmpty) return;
+    if (_chapters.isEmpty) return;
     final perChapter = 1.0 / _chapters.length;
-    final overall = (_chapterIndex * perChapter) +
-        perChapter * (_pageInChapter / _pagesInChapter.clamp(1, 99999));
+    final overall = ((_chapterIndex * perChapter) +
+            perChapter * (_pageInChapter / _pagesInChapter.clamp(1, 99999)))
+        .clamp(0.0, 1.0);
+
+    ref.read(readerProgressProvider.notifier).state = ReaderProgress(
+      fraction: overall,
+      label: 'Ch ${_chapterIndex + 1}/${_chapters.length} '
+          '· p ${_pageInChapter + 1}/$_pagesInChapter',
+    );
+
+    if (widget.book.id == null) return;
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 350), () {
       ref.read(bookRepositoryProvider).updateProgress(
         widget.book.id!,
-        progress: overall.clamp(0.0, 1.0),
+        progress: overall,
         position: {'chapter': _chapterIndex, 'page': _pageInChapter},
       );
     });

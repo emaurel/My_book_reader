@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../providers/reader_controls_provider.dart';
+import '../providers/reader_progress_provider.dart';
 import '../providers/reader_settings_provider.dart';
 
 class PdfReaderView extends ConsumerStatefulWidget {
@@ -45,19 +46,30 @@ class _PdfReaderViewState extends ConsumerState<PdfReaderView> {
   }
 
   void _onPageChanged(int page) {
-    if (widget.book.id == null || _totalPages == 0) return;
+    if (_totalPages == 0) return;
     _currentPage = page;
-    final progress = page / _totalPages;
-    ref.read(bookRepositoryProvider).updateProgress(
-      widget.book.id!,
-      progress: progress.clamp(0.0, 1.0),
-      position: {'page': page},
+    final progress = (page / _totalPages).clamp(0.0, 1.0);
+    ref.read(readerProgressProvider.notifier).state = ReaderProgress(
+      fraction: progress,
+      label: '$page / $_totalPages',
     );
+    if (widget.book.id != null) {
+      ref.read(bookRepositoryProvider).updateProgress(
+        widget.book.id!,
+        progress: progress,
+        position: {'page': page},
+      );
+    }
     setState(() {});
   }
 
   void _onDocumentLoaded(PdfDocument doc) {
     setState(() => _totalPages = doc.pagesCount);
+    final fraction = (_currentPage / _totalPages).clamp(0.0, 1.0);
+    ref.read(readerProgressProvider.notifier).state = ReaderProgress(
+      fraction: fraction,
+      label: '$_currentPage / $_totalPages',
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(readerControlsProvider.notifier).state = ReaderControls(
@@ -93,57 +105,27 @@ class _PdfReaderViewState extends ConsumerState<PdfReaderView> {
     final settings = ref.watch(readerSettingsProvider);
     _applyWakelock();
 
-    return Stack(
-      children: [
-        Container(
+    return Container(
+      color: settings.theme.background,
+      child: PdfView(
+        controller: _controller,
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        onPageChanged: _onPageChanged,
+        onDocumentLoaded: _onDocumentLoaded,
+        backgroundDecoration: BoxDecoration(
           color: settings.theme.background,
-          child: PdfView(
-            controller: _controller,
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            onPageChanged: _onPageChanged,
-            onDocumentLoaded: _onDocumentLoaded,
-            backgroundDecoration: BoxDecoration(
-              color: settings.theme.background,
-            ),
-            builders: PdfViewBuilders<DefaultBuilderOptions>(
-              options: const DefaultBuilderOptions(),
-              documentLoaderBuilder: (_) =>
-                  const Center(child: CircularProgressIndicator()),
-              pageLoaderBuilder: (_) =>
-                  const Center(child: CircularProgressIndicator()),
-              errorBuilder: (_, error) =>
-                  Center(child: Text('Failed to load PDF: $error')),
-            ),
-          ),
         ),
-        if (_totalPages > 0)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 16,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '$_currentPage / $_totalPages',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
+        builders: PdfViewBuilders<DefaultBuilderOptions>(
+          options: const DefaultBuilderOptions(),
+          documentLoaderBuilder: (_) =>
+              const Center(child: CircularProgressIndicator()),
+          pageLoaderBuilder: (_) =>
+              const Center(child: CircularProgressIndicator()),
+          errorBuilder: (_, error) =>
+              Center(child: Text('Failed to load PDF: $error')),
+        ),
+      ),
     );
   }
 }

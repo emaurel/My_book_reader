@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../providers/reader_controls_provider.dart';
+import '../providers/reader_progress_provider.dart';
 import '../providers/reader_settings_provider.dart';
 import 'widgets/reader_settings_sheet.dart';
 import 'azw_reader_view.dart';
@@ -32,6 +34,31 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void initState() {
     super.initState();
     _load();
+    _applySystemUi();
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    // Clear progress so the next reader open doesn't briefly show stale state.
+    Future.microtask(
+      () => ref.read(readerProgressProvider.notifier).state = null,
+    );
+    super.dispose();
+  }
+
+  /// Hide the bottom Android nav bar when chrome is dismissed for a
+  /// distraction-free reading experience. Status bar (top) stays so the
+  /// user can still see time / battery. Restored on screen exit.
+  void _applySystemUi() {
+    if (_chromeVisible) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: [SystemUiOverlay.top],
+      );
+    }
   }
 
   Future<void> _load() async {
@@ -53,7 +80,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
   }
 
-  void _toggleChrome() => setState(() => _chromeVisible = !_chromeVisible);
+  void _toggleChrome() {
+    setState(() => _chromeVisible = !_chromeVisible);
+    _applySystemUi();
+  }
 
   void _onTapUp(TapUpDetails details) {
     final width = MediaQuery.sizeOf(context).width;
@@ -91,10 +121,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     return Scaffold(
       backgroundColor: bg,
       extendBodyBehindAppBar: true,
+      extendBody: true,
+      bottomNavigationBar:
+          _chromeVisible ? _ReaderProgressBar(theme: settings.theme) : null,
       appBar: _chromeVisible
           ? AppBar(
-              backgroundColor: bg.withValues(alpha: 0.92),
+              backgroundColor: bg,
               foregroundColor: settings.theme.foreground,
+              shape: Border(
+                bottom: BorderSide(
+                  color: settings.theme.foreground.withValues(alpha: 0.18),
+                  width: 1,
+                ),
+              ),
               titleTextStyle: Theme.of(context)
                   .appBarTheme
                   .titleTextStyle
@@ -144,6 +183,69 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       showDragHandle: true,
       isScrollControlled: true,
       builder: (_) => const ReaderSettingsSheet(),
+    );
+  }
+}
+
+class _ReaderProgressBar extends ConsumerWidget {
+  const _ReaderProgressBar({required this.theme});
+
+  final ReaderTheme theme;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref.watch(readerProgressProvider);
+    final fg = theme.foreground;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.background,
+        border: Border(
+          top: BorderSide(
+            color: fg.withValues(alpha: 0.18),
+            width: 1,
+          ),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (progress?.fraction ?? 0).clamp(0.0, 1.0),
+                minHeight: 8,
+                backgroundColor: fg.withValues(alpha: 0.15),
+                valueColor: AlwaysStoppedAnimation(fg.withValues(alpha: 0.85)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  progress?.label ?? '—',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: fg.withValues(alpha: 0.85),
+                  ),
+                ),
+                Text(
+                  '${((progress?.fraction ?? 0) * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: fg.withValues(alpha: 0.85),
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../providers/reader_controls_provider.dart';
+import '../providers/reader_progress_provider.dart';
 import '../providers/reader_settings_provider.dart';
 
 /// Paginated TXT viewer. The full text is loaded once, then split into
@@ -96,6 +97,15 @@ class _TxtReaderViewState extends ConsumerState<TxtReaderView> {
       _pageController = PageController(initialPage: initialPage);
     });
     _registerControls();
+    // Publish initial progress so the chrome bar shows real values from
+    // first frame instead of "—".
+    if (pages.isNotEmpty) {
+      final fraction = ((initialPage + 1) / pages.length).clamp(0.0, 1.0);
+      ref.read(readerProgressProvider.notifier).state = ReaderProgress(
+        fraction: fraction,
+        label: '${initialPage + 1} / ${pages.length}',
+      );
+    }
   }
 
   void _registerControls() {
@@ -201,9 +211,15 @@ class _TxtReaderViewState extends ConsumerState<TxtReaderView> {
   }
 
   void _onPageChanged(int page) {
-    if (widget.book.id == null || _pages.isEmpty) return;
+    if (_pages.isEmpty) return;
     final progress = (page + 1) / _pages.length;
 
+    ref.read(readerProgressProvider.notifier).state = ReaderProgress(
+      fraction: progress.clamp(0.0, 1.0),
+      label: '${page + 1} / ${_pages.length}',
+    );
+
+    if (widget.book.id == null) return;
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 400), () {
       ref.read(bookRepositoryProvider).updateProgress(
@@ -251,43 +267,17 @@ class _TxtReaderViewState extends ConsumerState<TxtReaderView> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        return Column(
-          children: [
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: _onPageChanged,
-                itemCount: _pages.length,
-                itemBuilder: (_, i) => Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: settings.horizontalPadding,
-                    vertical: 24,
-                  ),
-                  child: Text(_pages[i], style: style),
-                ),
-              ),
+        return PageView.builder(
+          controller: _pageController,
+          onPageChanged: _onPageChanged,
+          itemCount: _pages.length,
+          itemBuilder: (_, i) => Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: settings.horizontalPadding,
+              vertical: 24,
             ),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: AnimatedBuilder(
-                animation: _pageController!,
-                builder: (_, __) {
-                  final page = _pageController!.hasClients &&
-                          _pageController!.page != null
-                      ? _pageController!.page!.round() + 1
-                      : 1;
-                  return Text(
-                    '$page / ${_pages.length}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: settings.theme.foreground.withValues(alpha: 0.6),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+            child: Text(_pages[i], style: style),
+          ),
         );
       },
     );

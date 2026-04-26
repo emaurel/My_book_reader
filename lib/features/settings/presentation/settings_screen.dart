@@ -55,7 +55,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const ListTile(
             title: Text('Supported formats'),
-            subtitle: Text('EPUB, PDF, TXT'),
+            subtitle: Text('EPUB, PDF, TXT, AZW, AZW3, MOBI'),
           ),
         ],
       ),
