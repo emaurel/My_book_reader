@@ -95,6 +95,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ? AppBar(
               backgroundColor: bg.withValues(alpha: 0.92),
               foregroundColor: settings.theme.foreground,
+              titleTextStyle: Theme.of(context)
+                  .appBarTheme
+                  .titleTextStyle
+                  ?.copyWith(color: settings.theme.foreground),
               title: Text(
                 _book!.title,
                 maxLines: 1,

@@ -1,16 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../main.dart';
 import '../data/book_repository.dart';
 import '../domain/book.dart';
 import '../services/book_metadata_extractor.dart';
 import '../services/book_scanner.dart';
 import '../services/file_importer.dart';
+import '../services/kindle_converter.dart';
 
 final bookRepositoryProvider = Provider<BookRepository>((_) => BookRepository());
 final fileImporterProvider = Provider<FileImporter>((_) => FileImporter());
 final bookScannerProvider = Provider<BookScanner>((_) => BookScanner());
 final metadataExtractorProvider =
     Provider<BookMetadataExtractor>((_) => BookMetadataExtractor());
+final kindleConverterProvider =
+    Provider<KindleConverter>((_) => KindleConverter());
 
 enum LibrarySort { recentlyAdded, recentlyOpened, title, author }
 
@@ -45,6 +50,30 @@ extension LibrarySortLabel on LibrarySort {
 final librarySortProvider =
     StateProvider<LibrarySort>((_) => LibrarySort.recentlyAdded);
 
+const _showDocumentsKey = 'library.showDocuments';
+
+/// When false (default), the library hides PDF and TXT files and the
+/// device scanner skips them. Toggled from the settings screen.
+final showDocumentsProvider =
+    StateNotifierProvider<ShowDocumentsNotifier, bool>((ref) {
+  return ShowDocumentsNotifier(ref.watch(sharedPreferencesProvider));
+});
+
+class ShowDocumentsNotifier extends StateNotifier<bool> {
+  ShowDocumentsNotifier(this._prefs)
+      : super(_prefs.getBool(_showDocumentsKey) ?? false);
+
+  final SharedPreferences _prefs;
+
+  Future<void> set(bool v) async {
+    state = v;
+    await _prefs.setBool(_showDocumentsKey, v);
+  }
+}
+
+bool _isBookFormat(BookFormat f) =>
+    f == BookFormat.epub || f == BookFormat.azw;
+
 final libraryProvider =
     AsyncNotifierProvider<LibraryNotifier, List<Book>>(LibraryNotifier.new);
 
@@ -52,8 +81,11 @@ class LibraryNotifier extends AsyncNotifier<List<Book>> {
   @override
   Future<List<Book>> build() async {
     final sort = ref.watch(librarySortProvider);
+    final showDocs = ref.watch(showDocumentsProvider);
     final repo = ref.watch(bookRepositoryProvider);
-    return repo.getAll(orderBy: sort.orderBy);
+    final all = await repo.getAll(orderBy: sort.orderBy);
+    if (showDocs) return all;
+    return all.where((b) => _isBookFormat(b.format)).toList();
   }
 
   Future<int> importFromPicker() async {
@@ -63,7 +95,14 @@ class LibraryNotifier extends AsyncNotifier<List<Book>> {
     final imported = await importer.pickAndImport();
     var added = 0;
 
-    for (final file in imported) {
+    for (final raw in imported) {
+      final file = await _maybeConvertKindle(
+        path: raw.path,
+        title: raw.title,
+        format: raw.format,
+        sizeBytes: raw.sizeBytes,
+      );
+
       final existing = await repo.getByPath(file.path);
       if (existing != null) continue;
 
@@ -91,11 +130,29 @@ class LibraryNotifier extends AsyncNotifier<List<Book>> {
     final granted = await scanner.ensureAccess();
     if (!granted) throw const ScanPermissionDeniedException();
 
-    final files = await scanner.scan();
+    final allFiles = await scanner.scan();
+    final showDocs = ref.read(showDocumentsProvider);
+    final files = showDocs
+        ? allFiles
+        : allFiles.where((f) => _isBookFormat(f.format)).toList();
     var added = 0;
-    for (final f in files) {
+    for (final raw in files) {
+      // Dedupe against the source path *before* converting, so AZW3s
+      // that were converted to EPUB on a previous scan don't get
+      // re-converted now.
+      final existingBySource = await repo.getBySourcePath(raw.path);
+      if (existingBySource != null) continue;
+
+      final f = await _maybeConvertKindle(
+        path: raw.path,
+        title: raw.title,
+        format: raw.format,
+        sizeBytes: raw.sizeBytes,
+      );
+
       final existing = await repo.getByPath(f.path);
       if (existing != null) continue;
+      final converted = f.format != raw.format;
       final id = await repo.insert(
         Book(
           title: f.title,
@@ -103,6 +160,7 @@ class LibraryNotifier extends AsyncNotifier<List<Book>> {
           format: f.format,
           fileSize: f.sizeBytes,
           addedAt: DateTime.now(),
+          originalPath: converted ? raw.path : null,
         ),
       );
       await _hydrateMetadata(id, f.path, f.format);
@@ -111,6 +169,42 @@ class LibraryNotifier extends AsyncNotifier<List<Book>> {
 
     if (added > 0) ref.invalidateSelf();
     return added;
+  }
+
+  /// For Kindle formats (AZW / AZW3 / MOBI), convert to EPUB via
+  /// `kindle_unpack` and return the EPUB-as-EPUB. Other formats pass
+  /// through. If conversion fails the book is left as AZW so the
+  /// placeholder reader explains the situation.
+  Future<_PendingBook> _maybeConvertKindle({
+    required String path,
+    required String title,
+    required BookFormat format,
+    required int sizeBytes,
+  }) async {
+    if (format != BookFormat.azw) {
+      return _PendingBook(
+        path: path,
+        title: title,
+        format: format,
+        sizeBytes: sizeBytes,
+      );
+    }
+    final converter = ref.read(kindleConverterProvider);
+    final converted = await converter.convert(path);
+    if (converted == null) {
+      return _PendingBook(
+        path: path,
+        title: title,
+        format: format,
+        sizeBytes: sizeBytes,
+      );
+    }
+    return _PendingBook(
+      path: converted.epubPath,
+      title: converted.title,
+      format: BookFormat.epub,
+      sizeBytes: converted.sizeBytes,
+    );
   }
 
   Future<void> _hydrateMetadata(
@@ -167,4 +261,18 @@ class LibraryNotifier extends AsyncNotifier<List<Book>> {
   }
 
   Future<void> refresh() async => ref.invalidateSelf();
+}
+
+class _PendingBook {
+  _PendingBook({
+    required this.path,
+    required this.title,
+    required this.format,
+    required this.sizeBytes,
+  });
+
+  final String path;
+  final String title;
+  final BookFormat format;
+  final int sizeBytes;
 }

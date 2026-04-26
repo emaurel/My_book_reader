@@ -24,7 +24,7 @@ class AzwReaderView extends ConsumerWidget {
             Icon(Icons.menu_book_outlined, size: 64, color: fg),
             const SizedBox(height: 16),
             Text(
-              'AZW / MOBI not yet supported',
+              'Could not convert this Kindle file',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
@@ -34,9 +34,10 @@ class AzwReaderView extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Kindle formats need a MOBI parser, which isn\'t bundled yet. '
-              'For now, convert this file to EPUB (e.g. with Calibre) '
-              'and re-import it.',
+              'The kindle_unpack converter rejected this file. It\'s most '
+              'likely DRM-protected (a purchase from the Kindle store), '
+              'or a Topaz / Print-Replica book. Try removing it and '
+              're-importing a non-DRM AZW3 / MOBI instead.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: fg.withValues(alpha: 0.75)),
             ),

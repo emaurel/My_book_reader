@@ -38,6 +38,22 @@ class BookRepository {
     return Book.fromMap(rows.first);
   }
 
+  /// Lookup that matches either the on-disk [Book.filePath] or the
+  /// pre-conversion [Book.originalPath]. Used by the device scanner so
+  /// AZW3 files that have already been converted to EPUB don't get
+  /// re-imported on every scan.
+  Future<Book?> getBySourcePath(String path) async {
+    final db = await _db;
+    final rows = await db.query(
+      'books',
+      where: 'file_path = ? OR original_path = ?',
+      whereArgs: [path, path],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return Book.fromMap(rows.first);
+  }
+
   Future<int> insert(Book book) async {
     final db = await _db;
     return db.insert(

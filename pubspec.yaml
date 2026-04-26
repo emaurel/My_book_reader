@@ -31,13 +31,13 @@ dependencies:
   # Format readers
   epubx: ^4.0.0              # EPUB parsing (chapters + metadata + cover)
   pdfx: ^2.6.0               # PDF rendering, free
-  image: ^3.3.0              # Cover image encoding (pinned for epubx compat)
   webview_flutter: ^4.10.0   # EPUB paginated rendering via CSS columns
   
   # UI
   google_fonts: ^6.2.1
   flutter_svg: ^2.0.10
   wakelock_plus: ^1.2.5
+  kindle_unpack: ^0.1.1
 
 dev_dependencies:
   flutter_lints: ^4.0.0

@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'book_reader.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
 
   Database? _db;
 
@@ -44,7 +44,8 @@ class DatabaseHelper {
         position TEXT,
         description TEXT,
         series TEXT,
-        series_number REAL
+        series_number REAL,
+        original_path TEXT
       )
     ''');
 
@@ -59,6 +60,9 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE books ADD COLUMN description TEXT');
       await db.execute('ALTER TABLE books ADD COLUMN series TEXT');
       await db.execute('ALTER TABLE books ADD COLUMN series_number REAL');
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE books ADD COLUMN original_path TEXT');
     }
   }
 }

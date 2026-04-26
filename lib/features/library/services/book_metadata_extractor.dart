@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:epubx/epubx.dart' as epubx;
-import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
@@ -68,21 +67,113 @@ class BookMetadataExtractor {
       }
     }
 
-    Uint8List? coverBytes;
-    final cover = book.CoverImage;
-    if (cover != null) {
-      final encoded = img.encodeJpg(cover, quality: 85);
-      coverBytes = Uint8List.fromList(encoded);
+    // Kindle Store convention: series isn't a discrete EXTH record; it's
+    // baked into the title as "Title (SeriesName Book N)". When no
+    // explicit series metadata is present, parse it out and clean the
+    // title.
+    var cleanedTitle = title;
+    if (title != null && series == null) {
+      final m = _seriesInTitlePattern.firstMatch(title);
+      if (m != null) {
+        cleanedTitle = m.group(1)?.trim();
+        series = m.group(2)?.trim();
+        seriesNumber = double.tryParse(m.group(3) ?? '');
+      }
     }
 
+    final coverHref = _findCoverHref(book);
+    final coverBytes = coverHref == null ? null : _imageBytesFor(book, coverHref);
+
     return ExtractedMetadata(
-      title: title,
+      title: cleanedTitle,
       author: author,
       description: description,
       series: series,
       seriesNumber: seriesNumber,
       coverBytes: coverBytes,
     );
+  }
+
+  /// Matches "Some Book Title (Some Series Name Book 3)" or
+  /// "Some Title (Some Series, Book 3.5)" or "Some Title (Series #3)".
+  /// Group 1: clean title. Group 2: series name. Group 3: series number.
+  static final RegExp _seriesInTitlePattern = RegExp(
+    r'^(.+?)\s*\(([^()]+?),?\s+(?:Book|Vol\.?|Volume|#)\s*(\d+(?:\.\d+)?)\)\s*$',
+    caseSensitive: false,
+  );
+
+  /// Find the cover image's href in the manifest. Walks three strategies in
+  /// order: EPUB-3 `properties="cover-image"`, EPUB-2 `<meta name="cover">`
+  /// pointing at a manifest item id, and finally a filename heuristic.
+  String? _findCoverHref(epubx.EpubBook book) {
+    final pkg = book.Schema?.Package;
+    final manifest = pkg?.Manifest;
+
+    if (manifest != null) {
+      for (final item in manifest.Items ?? const []) {
+        if ((item.Properties ?? '').toLowerCase().contains('cover-image')) {
+          return item.Href;
+        }
+      }
+    }
+
+    String? coverItemId;
+    final metaItems = pkg?.Metadata?.MetaItems ?? const [];
+    for (final m in metaItems) {
+      if (m.Name?.toLowerCase() == 'cover') {
+        coverItemId = m.Content;
+        break;
+      }
+    }
+    if (coverItemId != null && manifest != null) {
+      for (final item in manifest.Items ?? const []) {
+        if (item.Id == coverItemId) return item.Href;
+      }
+    }
+
+    final imgs = book.Content?.Images;
+    if (imgs != null) {
+      for (final key in imgs.keys) {
+        if (key.toLowerCase().contains('cover')) return key;
+      }
+    }
+
+    // 4. Last resort: the largest image in the book. Covers are almost
+    // always the highest-resolution asset (full-page illustrations are
+    // 50–500 KB; inline figures are usually under 20 KB), so this is a
+    // reliable fallback for EPUBs that don't declare a cover anywhere.
+    if (imgs != null && imgs.isNotEmpty) {
+      String? largestKey;
+      var largestSize = 0;
+      for (final entry in imgs.entries) {
+        final size = entry.value.Content?.length ?? 0;
+        if (size > largestSize) {
+          largestSize = size;
+          largestKey = entry.key;
+        }
+      }
+      if (largestKey != null) return largestKey;
+    }
+
+    return null;
+  }
+
+  /// Lookup raw image bytes by manifest href. Tries an exact key match
+  /// first, then a basename match (paths in EPUBs are sometimes relative
+  /// to the OPF and don't match `Content.Images` keys exactly).
+  Uint8List? _imageBytesFor(epubx.EpubBook book, String href) {
+    final imgs = book.Content?.Images ?? const <String, epubx.EpubByteContentFile>{};
+    final exact = imgs[href];
+    if (exact?.Content != null) {
+      return Uint8List.fromList(exact!.Content!);
+    }
+    final basename = href.split('/').last;
+    for (final entry in imgs.entries) {
+      if (entry.key.endsWith(basename) && entry.value.Content != null) {
+        return Uint8List.fromList(entry.value.Content!);
+      }
+    }
+    return null;
   }
 
   Future<ExtractedMetadata> _extractPdf(String filePath) async {

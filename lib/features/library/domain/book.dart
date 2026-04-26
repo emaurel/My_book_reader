@@ -40,6 +40,7 @@ class Book {
     this.description,
     this.series,
     this.seriesNumber,
+    this.originalPath,
   });
 
   final int? id;
@@ -57,6 +58,14 @@ class Book {
   final String? series;
   final double? seriesNumber;
 
+  /// Path on the source device when the book required conversion (e.g.
+  /// the original AZW3 in /sdcard/Download before kindle_unpack produced
+  /// the EPUB at [filePath]). Used to dedupe future device scans so the
+  /// same source file isn't re-converted on every scan. Null when no
+  /// conversion happened — [filePath] is then both the source and the
+  /// path on disk we read from.
+  final String? originalPath;
+
   Book copyWith({
     int? id,
     String? title,
@@ -72,6 +81,7 @@ class Book {
     String? description,
     String? series,
     double? seriesNumber,
+    String? originalPath,
   }) {
     return Book(
       id: id ?? this.id,
@@ -88,6 +98,7 @@ class Book {
       description: description ?? this.description,
       series: series ?? this.series,
       seriesNumber: seriesNumber ?? this.seriesNumber,
+      originalPath: originalPath ?? this.originalPath,
     );
   }
 
@@ -106,6 +117,7 @@ class Book {
         'description': description,
         'series': series,
         'series_number': seriesNumber,
+        'original_path': originalPath,
       };
 
   factory Book.fromMap(Map<String, dynamic> m) => Book(
@@ -131,5 +143,6 @@ class Book {
         description: m['description'] as String?,
         series: m['series'] as String?,
         seriesNumber: (m['series_number'] as num?)?.toDouble(),
+        originalPath: m['original_path'] as String?,
       );
 }

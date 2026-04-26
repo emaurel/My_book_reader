@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../shared/navigation/main_drawer.dart';
 import '../domain/book.dart';
 import '../providers/library_provider.dart';
 import 'widgets/book_grid_item.dart';
@@ -16,6 +17,7 @@ class LibraryScreen extends ConsumerWidget {
     final sort = ref.watch(librarySortProvider);
 
     return Scaffold(
+      drawer: const MainDrawer(currentRoute: '/'),
       appBar: AppBar(
         title: const Text('Library'),
         actions: [

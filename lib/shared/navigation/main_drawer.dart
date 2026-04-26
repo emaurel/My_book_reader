@@ -1,0 +1,93 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+/// One entry in the app's left drawer. Add new sections by appending to
+/// [mainDrawerEntries] below — no code in this file needs to change.
+class DrawerEntry {
+  const DrawerEntry({
+    required this.icon,
+    required this.label,
+    required this.routePath,
+  });
+
+  final IconData icon;
+  final String label;
+  final String routePath;
+}
+
+/// Single source of truth for the drawer contents. Add a new item here
+/// and create the matching `GoRoute` in `app_router.dart`.
+const List<DrawerEntry> mainDrawerEntries = [
+  DrawerEntry(
+    icon: Icons.menu_book_outlined,
+    label: 'Library',
+    routePath: '/',
+  ),
+];
+
+class MainDrawer extends StatelessWidget {
+  const MainDrawer({super.key, required this.currentRoute});
+
+  /// Current top-level route path, used to highlight the active entry.
+  final String currentRoute;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+              child: Text(
+                'Book Reader',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            for (final entry in mainDrawerEntries)
+              _DrawerTile(
+                entry: entry,
+                selected: entry.routePath == currentRoute,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerTile extends StatelessWidget {
+  const _DrawerTile({required this.entry, required this.selected});
+
+  final DrawerEntry entry;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: Icon(
+        entry.icon,
+        color: selected ? scheme.primary : null,
+      ),
+      title: Text(
+        entry.label,
+        style: TextStyle(
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          color: selected ? scheme.primary : null,
+        ),
+      ),
+      selected: selected,
+      onTap: () {
+        Navigator.pop(context);
+        if (!selected) context.go(entry.routePath);
+      },
+    );
+  }
+}
