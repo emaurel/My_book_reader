@@ -65,6 +65,16 @@ const List<DrawerEntry> mainDrawerEntries = [
   ),
 ];
 
+/// Footer entries pinned to the bottom of the drawer with a divider
+/// separating them from the main navigation. Currently just Settings.
+const List<DrawerEntry> drawerFooterEntries = [
+  DrawerEntry(
+    icon: Icons.settings_outlined,
+    label: 'Settings',
+    routePath: '/settings',
+  ),
+];
+
 class MainDrawer extends StatelessWidget {
   const MainDrawer({super.key, required this.currentRoute});
 
@@ -90,7 +100,20 @@ class MainDrawer extends StatelessWidget {
             ),
             const Divider(height: 1),
             const SizedBox(height: 8),
-            for (final entry in mainDrawerEntries)
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  for (final entry in mainDrawerEntries)
+                    _DrawerTile(
+                      entry: entry,
+                      selected: entry.routePath == currentRoute,
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            for (final entry in drawerFooterEntries)
               _DrawerTile(
                 entry: entry,
                 selected: entry.routePath == currentRoute,

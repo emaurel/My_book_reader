@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/theme/theme_provider.dart';
+import '../../../shared/navigation/main_drawer.dart';
 import '../../library/providers/library_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -14,6 +16,7 @@ class SettingsScreen extends ConsumerWidget {
     final showDocs = ref.watch(showDocumentsProvider);
 
     return Scaffold(
+      drawer: const MainDrawer(currentRoute: '/settings'),
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
@@ -60,9 +63,17 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(),
           const _SectionHeader('About'),
-          const ListTile(
-            title: Text('Book Reader'),
-            subtitle: Text('Version 0.1.0'),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (_, snap) => ListTile(
+              title: const Text('Book Reader'),
+              subtitle: Text(
+                snap.hasData
+                    ? 'Version ${snap.data!.version} '
+                        '(build ${snap.data!.buildNumber})'
+                    : 'Version …',
+              ),
+            ),
           ),
           const ListTile(
             title: Text('Supported formats'),
