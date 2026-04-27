@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'book_reader.db';
-  static const _dbVersion = 9;
+  static const _dbVersion = 10;
 
   Database? _db;
 
@@ -86,6 +86,7 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         series TEXT,
         created_at INTEGER NOT NULL,
+        updated_at INTEGER,
         UNIQUE(name, series)
       )
     ''');
@@ -219,6 +220,15 @@ class DatabaseHelper {
     }
     if (oldVersion < 9) {
       await _createCharacterAliasesTable(db);
+    }
+    if (oldVersion < 10) {
+      await tryExec('ALTER TABLE characters ADD COLUMN updated_at INTEGER');
+      // Backfill so existing characters have a sensible last-modified
+      // timestamp matching their creation date.
+      await db.execute(
+        'UPDATE characters SET updated_at = created_at '
+        'WHERE updated_at IS NULL',
+      );
     }
   }
 }

@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/navigation/main_drawer.dart';
 import '../domain/dictionary.dart';
-import '../domain/dictionary_entry.dart';
 import '../providers/dictionary_provider.dart';
+import 'widgets/dictionary_entry_card.dart';
 
 class DictionariesScreen extends ConsumerWidget {
   const DictionariesScreen({super.key});
@@ -163,53 +163,40 @@ class _DictionaryCard extends ConsumerWidget {
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
-          FutureBuilder<List<DictionaryEntry>>(
-            future: ref
-                .read(dictionaryRepositoryProvider)
-                .entriesForDictionary(dict.id!),
-            builder: (_, snap) {
-              if (!snap.hasData) {
-                return const Padding(
+          Consumer(
+            builder: (_, ref, __) {
+              final entries =
+                  ref.watch(entriesForDictionaryProvider(dict.id!));
+              return entries.when(
+                loading: () => const Padding(
                   padding: EdgeInsets.all(8),
                   child: LinearProgressIndicator(),
-                );
-              }
-              final entries = snap.data!;
-              if (entries.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    'No entries yet.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final e in entries)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            e.word,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            e.definition,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
+                ),
+                error: (e, _) => Text('Error: $e'),
+                data: (list) {
+                  if (list.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'No entries yet.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                ],
+                    );
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final e in list)
+                        DictionaryEntryCard(
+                          key: ValueKey(e.id),
+                          header: e.word,
+                          entry: e,
+                        ),
+                    ],
+                  );
+                },
               );
             },
           ),

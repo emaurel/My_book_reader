@@ -7,19 +7,34 @@ import '../domain/character_description.dart';
 class CharacterRepository {
   Future<Database> get _db async => DatabaseHelper.instance.database;
 
+  /// Bump `characters.updated_at` so the character moves to the top of
+  /// "by last modified" sorts. Called after every description / alias
+  /// mutation. Safe to call with a non-existent id (no-op).
+  Future<void> _touchCharacter(int characterId) async {
+    final db = await _db;
+    await db.update(
+      'characters',
+      {'updated_at': DateTime.now().millisecondsSinceEpoch},
+      where: 'id = ?',
+      whereArgs: [characterId],
+    );
+  }
+
+  static const _orderClause =
+      'COALESCE(updated_at, created_at) DESC, name COLLATE NOCASE ASC';
+
   // ---- Characters ----
 
   Future<List<Character>> listAll() async {
     final db = await _db;
-    final rows = await db.query(
-      'characters',
-      orderBy: 'name COLLATE NOCASE ASC',
-    );
+    final rows = await db.query('characters', orderBy: _orderClause);
     return rows.map(Character.fromMap).toList();
   }
 
   /// Characters that apply to a book in [series]: global characters
-  /// (`series IS NULL`) plus any whose series matches.
+  /// (`series IS NULL`) plus any whose series matches. Ordered by
+  /// last-modified first so recently-touched names surface in the
+  /// add-description picker.
   Future<List<Character>> listForSeries(String? series) async {
     final db = await _db;
     final List<Map<String, Object?>> rows;
@@ -27,14 +42,14 @@ class CharacterRepository {
       rows = await db.query(
         'characters',
         where: 'series IS NULL',
-        orderBy: 'name COLLATE NOCASE ASC',
+        orderBy: _orderClause,
       );
     } else {
       rows = await db.query(
         'characters',
         where: 'series IS NULL OR series = ?',
         whereArgs: [series],
-        orderBy: 'name COLLATE NOCASE ASC',
+        orderBy: _orderClause,
       );
     }
     return rows.map(Character.fromMap).toList();
@@ -42,10 +57,12 @@ class CharacterRepository {
 
   Future<int> create({required String name, String? series}) async {
     final db = await _db;
+    final now = DateTime.now().millisecondsSinceEpoch;
     return db.insert('characters', {
       'name': name,
       'series': series,
-      'created_at': DateTime.now().millisecondsSinceEpoch,
+      'created_at': now,
+      'updated_at': now,
     });
   }
 
@@ -84,12 +101,14 @@ class CharacterRepository {
     int? bookId,
   }) async {
     final db = await _db;
-    return db.insert('character_descriptions', {
+    final id = await db.insert('character_descriptions', {
       'character_id': characterId,
       'text': text,
       'book_id': bookId,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
+    await _touchCharacter(characterId);
+    return id;
   }
 
   Future<void> updateDescription({
@@ -103,11 +122,31 @@ class CharacterRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+    final rows = await db.query(
+      'character_descriptions',
+      columns: ['character_id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      await _touchCharacter(rows.first['character_id'] as int);
+    }
   }
 
   Future<void> deleteDescription(int id) async {
     final db = await _db;
+    final rows = await db.query(
+      'character_descriptions',
+      columns: ['character_id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     await db.delete('character_descriptions', where: 'id = ?', whereArgs: [id]);
+    if (rows.isNotEmpty) {
+      await _touchCharacter(rows.first['character_id'] as int);
+    }
   }
 
   Future<List<CharacterDescription>> descriptionsForCharacter(
@@ -138,11 +177,13 @@ class CharacterRepository {
 
   Future<int> addAlias({required int characterId, required String alias}) async {
     final db = await _db;
-    return db.insert(
+    final id = await db.insert(
       'character_aliases',
       {'character_id': characterId, 'alias': alias},
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
+    await _touchCharacter(characterId);
+    return id;
   }
 
   Future<void> deleteAlias({required int characterId, required String alias}) async {
@@ -152,6 +193,7 @@ class CharacterRepository {
       where: 'character_id = ? AND alias = ? COLLATE NOCASE',
       whereArgs: [characterId, alias],
     );
+    await _touchCharacter(characterId);
   }
 
   /// Map of character_id → list of aliases for the given series scope.

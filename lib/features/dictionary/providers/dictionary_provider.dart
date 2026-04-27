@@ -65,3 +65,13 @@ final entriesForWordProvider =
       WordEntry(entry: e, dictionaryName: nameById[e.dictionaryId]),
   ];
 });
+
+/// Entries belonging to a single dictionary. Re-runs when the revision
+/// counter changes so card-driven edits/deletes propagate.
+final entriesForDictionaryProvider = FutureProvider.family<
+    List<DictionaryEntry>, int>((ref, dictionaryId) {
+  ref.watch(dictionaryEntriesRevisionProvider);
+  return ref
+      .watch(dictionaryRepositoryProvider)
+      .entriesForDictionary(dictionaryId);
+});
