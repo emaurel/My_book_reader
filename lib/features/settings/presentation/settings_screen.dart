@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/theme_provider.dart';
 import '../../library/providers/library_provider.dart';
@@ -23,6 +24,16 @@ class SettingsScreen extends ConsumerWidget {
             value: showDocs,
             onChanged: (v) =>
                 ref.read(showDocumentsProvider.notifier).set(v),
+          ),
+          const Divider(),
+          const _SectionHeader('Reader'),
+          ListTile(
+            title: const Text('Selection menu'),
+            subtitle: const Text(
+              'Reorder actions and choose which appear in "…"',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/selection-menu'),
           ),
           const Divider(),
           const _SectionHeader('Appearance'),

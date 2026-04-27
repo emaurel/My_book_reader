@@ -35,13 +35,25 @@ class SelectionContext {
 /// [selectionActionsProvider] list — no other code needs to change.
 class SelectionAction {
   const SelectionAction({
+    required this.id,
     required this.icon,
     required this.label,
     required this.onTap,
+    this.overflow = false,
   });
+
+  /// Stable identifier used to persist user customization (order +
+  /// overflow flag). Lowercase snake_case.
+  final String id;
 
   final IconData icon;
   final String label;
+
+  /// When true, this action lives behind the popup's "…" overflow
+  /// button instead of the inline row. New actions default to
+  /// overflow=true so the inline row stays compact; promote to
+  /// inline by setting this flag false.
+  final bool overflow;
 
   /// Runs when the user taps the action. Receives the reader's
   /// [BuildContext] so the action can show modal sheets / dialogs.
@@ -52,4 +64,12 @@ class SelectionAction {
     WidgetRef ref,
     SelectionContext ctx,
   ) onTap;
+
+  SelectionAction copyWith({bool? overflow}) => SelectionAction(
+        id: id,
+        icon: icon,
+        label: label,
+        onTap: onTap,
+        overflow: overflow ?? this.overflow,
+      );
 }

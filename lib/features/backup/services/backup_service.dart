@@ -22,6 +22,7 @@ const _backedUpPrefKeys = <String>[
   'reader.keepScreenOn',
   'book_links.graph_positions',
   'book_links.graph_transform',
+  'reader.selection_menu',
 ];
 
 const _dbFilename = 'book_reader.db';

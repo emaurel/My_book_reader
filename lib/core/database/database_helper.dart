@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'book_reader.db';
-  static const _dbVersion = 12;
+  static const _dbVersion = 13;
 
   /// Exposed for the backup service so it can reject backups taken on
   /// future app versions whose DB schema we don't yet understand.
@@ -90,6 +90,32 @@ class DatabaseHelper {
     await _createDictionaryTables(db);
     await _createCharacterTables(db);
     await _createBookLinksTable(db);
+    await _createNotesTable(db);
+  }
+
+  Future<void> _createNotesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id INTEGER,
+        chapter_index INTEGER,
+        char_start INTEGER,
+        char_end INTEGER,
+        selected_text TEXT NOT NULL,
+        note_text TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_notes_book_chapter '
+      'ON notes(book_id, chapter_index)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_notes_created_at '
+      'ON notes(created_at DESC)',
+    );
   }
 
   Future<void> _createBookLinksTable(Database db) async {
@@ -311,6 +337,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 12) {
       await _createBookLinksTable(db);
+    }
+    if (oldVersion < 13) {
+      await _createNotesTable(db);
     }
   }
 }

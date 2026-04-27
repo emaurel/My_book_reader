@@ -7,6 +7,8 @@ import '../../features/backup/presentation/backup_screen.dart';
 import '../../features/book_links/presentation/links_screen.dart';
 import '../../features/dictionary/presentation/dictionaries_screen.dart';
 import '../../features/downloads/presentation/download_books_screen.dart';
+import '../../features/notes/presentation/notes_screen.dart';
+import '../../features/settings/presentation/selection_menu_settings_screen.dart';
 import '../../features/library/presentation/current_readings_screen.dart';
 import '../../features/library/presentation/library_screen.dart';
 import '../../features/reader/presentation/reader_screen.dart';
@@ -57,6 +59,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const LinksScreen(),
       ),
       GoRoute(
+        path: '/notes',
+        name: 'notes',
+        builder: (_, __) => const NotesScreen(),
+      ),
+      GoRoute(
         path: '/downloads',
         name: 'downloads',
         builder: (_, __) => const DownloadBooksScreen(),
@@ -70,6 +77,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: 'settings',
         builder: (_, __) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/settings/selection-menu',
+        name: 'selection_menu_settings',
+        builder: (_, __) => const SelectionMenuSettingsScreen(),
       ),
     ],
   );

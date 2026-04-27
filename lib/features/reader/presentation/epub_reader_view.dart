@@ -16,6 +16,8 @@ import '../../characters/presentation/widgets/character_descriptions_sheet.dart'
 import '../../characters/providers/character_provider.dart';
 import '../../book_links/providers/book_link_provider.dart';
 import '../../citations/providers/citation_provider.dart';
+import '../../notes/presentation/widgets/add_note_sheet.dart';
+import '../../notes/providers/note_provider.dart';
 import '../../dictionary/presentation/widgets/definition_sheet.dart';
 import '../../dictionary/providers/dictionary_provider.dart';
 import '../../library/domain/book.dart';
@@ -296,6 +298,12 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
   .cu-link {
     color: rgb(200, 30, 40);
     font-weight: bold;
+    cursor: pointer;
+  }
+  /* Note — dotted purple underline, distinct from cu-dict (dotted
+     blue), cu-char (dashed green), cu-cite (solid amber). */
+  .cu-note {
+    border-bottom: 1.5px dotted rgba(150, 80, 200, 0.9);
     cursor: pointer;
   }
   /* Outer hitbox is 44px (Material minimum touch target). The visible
@@ -761,6 +769,65 @@ $body
     }
   };
 
+  // ===== Notes (purple dotted underline) =====
+  function unwrapAllNotes() {
+    var spans = document.querySelectorAll('span.cu-note');
+    for (var i = 0; i < spans.length; i++) {
+      var span = spans[i];
+      var parent = span.parentNode;
+      if (!parent) continue;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    }
+    document.body.normalize();
+  }
+
+  function wrapNote(id, start, end) {
+    if (start == null || end == null || start >= end) return;
+    var s = nodeAtOffset(start);
+    var e = nodeAtOffset(end);
+    if (!s || !e) return;
+    var range = document.createRange();
+    try { range.setStart(s.node, s.offset); range.setEnd(e.node, e.offset); }
+    catch (_) { return; }
+    var fragments = [];
+    var iter = document.createNodeIterator(
+      range.commonAncestorContainer,
+      NodeFilter.SHOW_TEXT,
+      function(node) {
+        return range.intersectsNode(node)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT;
+      }
+    );
+    var node;
+    while ((node = iter.nextNode())) {
+      var fStart = (node === range.startContainer) ? range.startOffset : 0;
+      var fEnd = (node === range.endContainer)
+        ? range.endOffset : node.textContent.length;
+      if (fStart < fEnd) fragments.push({node: node, start: fStart, end: fEnd});
+    }
+    for (var i = fragments.length - 1; i >= 0; i--) {
+      var f = fragments[i];
+      var sub = document.createRange();
+      try { sub.setStart(f.node, f.start); sub.setEnd(f.node, f.end); }
+      catch (_) { continue; }
+      var span = document.createElement('span');
+      span.className = 'cu-note';
+      span.setAttribute('data-note-id', String(id));
+      try { sub.surroundContents(span); } catch (_) {}
+    }
+  }
+
+  window.applyNoteHighlights = function(arr) {
+    unwrapAllNotes();
+    if (!arr || arr.length === 0) return;
+    arr.sort(function(a, b) { return a.start - b.start; });
+    for (var i = 0; i < arr.length; i++) {
+      wrapNote(arr[i].id, arr[i].start, arr[i].end);
+    }
+  };
+
   // ===== Character name underlines =====
   function unwrapAllCharacters() {
     var spans = document.querySelectorAll('span.cu-char');
@@ -1125,6 +1192,14 @@ $body
           }));
           return;
         }
+        if (t.classList.contains('cu-note')) {
+          var noteIdAttr = t.getAttribute('data-note-id');
+          Selection.postMessage(JSON.stringify({
+            type: 'note_tap',
+            id: parseInt(noteIdAttr, 10),
+          }));
+          return;
+        }
       }
       t = t.parentNode;
     }
@@ -1335,6 +1410,12 @@ $body
         return;
       }
 
+      if (type == 'note_tap') {
+        final id = (data['id'] as num).toInt();
+        _onNoteTap(id);
+        return;
+      }
+
       if (type != 'changed') {
         if (_selection != null || _tappedCitation != null) {
           setState(() {
@@ -1373,6 +1454,39 @@ $body
     await _applyDictionaryHighlightsForCurrentChapter();
     await _applyCharacterHighlightsForCurrentChapter();
     await _applyLinksForCurrentChapter();
+    await _applyNotesForCurrentChapter();
+  }
+
+  Future<void> _applyNotesForCurrentChapter() async {
+    if (widget.book.id == null) return;
+    final notes = await ref
+        .read(noteRepositoryProvider)
+        .getByBookAndChapter(widget.book.id!, _chapterIndex);
+    final payload = notes
+        .where((n) => n.charStart != null && n.charEnd != null)
+        .map((n) => {
+              'id': n.id,
+              'start': n.charStart,
+              'end': n.charEnd,
+            })
+        .toList();
+    await _web.runJavaScript(
+      'applyNoteHighlights(${jsonEncode(payload)});',
+    );
+  }
+
+  Future<void> _onNoteTap(int noteId) async {
+    final note = await ref.read(noteRepositoryProvider).getById(noteId);
+    if (!mounted || note == null) return;
+    final modified = await showEditNoteSheet(
+      context,
+      noteId: note.id!,
+      selectedText: note.selectedText,
+      currentText: note.noteText,
+    );
+    if (modified) {
+      await _applyNotesForCurrentChapter();
+    }
   }
 
   Future<void> _applyLinksForCurrentChapter() async {
@@ -1755,7 +1869,7 @@ class _SelectionPopup extends StatelessWidget {
           // when it can't fit horizontally on narrow screens.
           child: Wrap(
             children: [
-              for (final a in actions)
+              for (final a in actions.where((x) => !x.overflow))
                 InkWell(
                   onTap: () => onActionTap(a),
                   child: Padding(
@@ -1775,6 +1889,17 @@ class _SelectionPopup extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                ),
+              if (actions.any((a) => a.overflow))
+                InkWell(
+                  onTap: () => _showOverflow(context),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Icon(Icons.more_horiz, size: 20),
                   ),
                 ),
             ],
@@ -1802,6 +1927,30 @@ class _SelectionPopup extends StatelessWidget {
         top: selection.rect.bottom + _gap,
         child: popupContent,
       );
+    }
+  }
+
+  Future<void> _showOverflow(BuildContext context) async {
+    final overflowActions = actions.where((a) => a.overflow).toList();
+    final picked = await showModalBottomSheet<SelectionAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final a in overflowActions)
+              ListTile(
+                leading: Icon(a.icon),
+                title: Text(a.label),
+                onTap: () => Navigator.pop(sheetContext, a),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) {
+      await onActionTap(picked);
     }
   }
 }
