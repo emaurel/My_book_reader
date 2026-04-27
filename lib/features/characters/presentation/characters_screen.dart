@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/navigation/main_drawer.dart';
+import '../domain/affiliation.dart';
 import '../domain/character.dart';
 import '../providers/character_provider.dart';
+import 'widgets/character_affiliations_editor.dart';
 import 'widgets/character_alias_editor.dart';
 import 'widgets/character_description_card.dart';
 
@@ -41,7 +43,7 @@ class CharactersScreen extends ConsumerWidget {
               for (final series in keys)
                 Theme(
                   // Hide the default ExpansionTile divider lines so the
-                  // series group blends with the character cards inside.
+                  // series group blends with its affiliation sub-groups.
                   data: theme.copyWith(
                     dividerColor: Colors.transparent,
                   ),
@@ -58,10 +60,10 @@ class CharactersScreen extends ConsumerWidget {
                       ),
                     ),
                     children: [
-                      for (final c in bySeries[series]!) ...[
-                        _CharacterCard(character: c),
-                        const SizedBox(height: 10),
-                      ],
+                      _SeriesAffiliations(
+                        series: series,
+                        characters: bySeries[series]!,
+                      ),
                     ],
                   ),
                 ),
@@ -71,6 +73,124 @@ class CharactersScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Within one series group, splits its characters into sub-groups by
+/// affiliation. A character with multiple affiliations appears under
+/// each one; characters with no affiliation go in an "Unaffiliated"
+/// section at the bottom. Each sub-group is its own ExpansionTile so
+/// it can be collapsed independently.
+class _SeriesAffiliations extends ConsumerWidget {
+  const _SeriesAffiliations({
+    required this.series,
+    required this.characters,
+  });
+
+  final String? series;
+  final List<Character> characters;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final affMap =
+        ref.watch(affiliationsByCharacterForSeriesProvider(series));
+    return affMap.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(8),
+        child: LinearProgressIndicator(),
+      ),
+      error: (e, _) => Text('Error: $e'),
+      data: (byChar) {
+        // Build {affiliationId → (Affiliation, [characters])}
+        // and also collect characters that have no affiliation.
+        final byAffiliation = <int, _AffiliationGroup>{};
+        final unaffiliated = <Character>[];
+        for (final c in characters) {
+          final ams = byChar[c.id] ?? const <Affiliation>[];
+          if (ams.isEmpty) {
+            unaffiliated.add(c);
+            continue;
+          }
+          for (final a in ams) {
+            final id = a.id!;
+            final group = byAffiliation.putIfAbsent(
+              id,
+              () => _AffiliationGroup(affiliation: a),
+            );
+            group.characters.add(c);
+          }
+        }
+        final groupKeys = byAffiliation.keys.toList()
+          ..sort((a, b) => byAffiliation[a]!
+              .affiliation
+              .name
+              .toLowerCase()
+              .compareTo(
+                byAffiliation[b]!.affiliation.name.toLowerCase(),
+              ));
+
+        Widget affiliationTile(_AffiliationGroup group) {
+          return Theme(
+            data: theme.copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: true,
+              tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+              childrenPadding: EdgeInsets.zero,
+              title: Text(
+                group.affiliation.name,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              children: [
+                for (final c in group.characters) ...[
+                  _CharacterCard(character: c),
+                  const SizedBox(height: 10),
+                ],
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final id in groupKeys) affiliationTile(byAffiliation[id]!),
+            if (unaffiliated.isNotEmpty)
+              Theme(
+                data: theme.copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: true,
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+                  childrenPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Unaffiliated',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  children: [
+                    for (final c in unaffiliated) ...[
+                      _CharacterCard(character: c),
+                      const SizedBox(height: 10),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AffiliationGroup {
+  _AffiliationGroup({required this.affiliation});
+  final Affiliation affiliation;
+  final List<Character> characters = [];
 }
 
 class _CharacterCard extends ConsumerWidget {
@@ -147,6 +267,8 @@ class _CharacterCard extends ConsumerWidget {
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
           CharacterAliasEditor(character: character),
+          const SizedBox(height: 12),
+          CharacterAffiliationsEditor(character: character),
           const SizedBox(height: 16),
           descs.when(
             loading: () => const Padding(

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/character_repository.dart';
+import '../domain/affiliation.dart';
 import '../domain/character.dart';
 import '../domain/character_description.dart';
 
@@ -62,4 +63,34 @@ final aliasesForCharacterProvider =
   return ref
       .watch(characterRepositoryProvider)
       .aliasesForCharacter(characterId);
+});
+
+/// All affiliations available in the given series (globals + matching).
+/// Watched by the affiliation editor's picker dropdown.
+final affiliationsForSeriesProvider =
+    FutureProvider.family<List<Affiliation>, String?>((ref, series) {
+  ref.watch(characterRevisionProvider);
+  return ref
+      .watch(characterRepositoryProvider)
+      .listAffiliationsForSeries(series);
+});
+
+/// Affiliations linked to a single character.
+final affiliationsForCharacterProvider =
+    FutureProvider.family<List<Affiliation>, int>((ref, characterId) {
+  ref.watch(characterRevisionProvider);
+  return ref
+      .watch(characterRepositoryProvider)
+      .affiliationsForCharacter(characterId);
+});
+
+/// Map of character_id → affiliations within a series scope. Used by
+/// the Characters screen to nest characters under affiliation
+/// sub-groups inside their series group.
+final affiliationsByCharacterForSeriesProvider = FutureProvider.family<
+    Map<int, List<Affiliation>>, String?>((ref, series) {
+  ref.watch(characterRevisionProvider);
+  return ref
+      .watch(characterRepositoryProvider)
+      .affiliationsByCharacter(series);
 });

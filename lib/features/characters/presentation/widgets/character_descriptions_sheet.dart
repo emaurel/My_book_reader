@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/character.dart';
 import '../../providers/character_provider.dart';
+import 'character_affiliations_editor.dart';
 import 'character_alias_editor.dart';
 import 'character_description_card.dart';
 
@@ -110,6 +111,8 @@ class _CharacterBody extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         CharacterAliasEditor(character: character),
+        const SizedBox(height: 12),
+        CharacterAffiliationsEditor(character: character),
         const SizedBox(height: 16),
         descs.when(
           loading: () => const Padding(

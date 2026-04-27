@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 
 import '../../../core/database/database_helper.dart';
+import '../domain/affiliation.dart';
 import '../domain/character.dart';
 import '../domain/character_description.dart';
 
@@ -227,6 +228,118 @@ class CharacterRepository {
   /// Find a character by name OR alias. Used when the user taps an
   /// underlined token in the reader so we can identify which character
   /// it belongs to.
+  // ---- Affiliations ----
+
+  Future<List<Affiliation>> listAffiliationsForSeries(String? series) async {
+    final db = await _db;
+    final List<Map<String, Object?>> rows;
+    if (series == null) {
+      rows = await db.query(
+        'affiliations',
+        where: 'series IS NULL',
+        orderBy: 'name COLLATE NOCASE ASC',
+      );
+    } else {
+      rows = await db.query(
+        'affiliations',
+        where: 'series IS NULL OR series = ?',
+        whereArgs: [series],
+        orderBy: 'name COLLATE NOCASE ASC',
+      );
+    }
+    return rows.map(Affiliation.fromMap).toList();
+  }
+
+  Future<int> createAffiliation({
+    required String name,
+    String? series,
+  }) async {
+    final db = await _db;
+    return db.insert(
+      'affiliations',
+      {
+        'name': name,
+        'series': series,
+        'created_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  Future<void> deleteAffiliation(int id) async {
+    final db = await _db;
+    await db.delete('affiliations', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<Affiliation>> affiliationsForCharacter(int characterId) async {
+    final db = await _db;
+    final rows = await db.rawQuery('''
+      SELECT a.* FROM affiliations a
+      JOIN character_affiliations ca ON ca.affiliation_id = a.id
+      WHERE ca.character_id = ?
+      ORDER BY a.name COLLATE NOCASE ASC
+    ''', [characterId]);
+    return rows.map(Affiliation.fromMap).toList();
+  }
+
+  /// All character_id → list-of-affiliations within a series scope.
+  /// Used to build the Characters management screen's grouping.
+  Future<Map<int, List<Affiliation>>> affiliationsByCharacter(
+    String? series,
+  ) async {
+    final db = await _db;
+    final List<Map<String, Object?>> rows;
+    if (series == null) {
+      rows = await db.rawQuery('''
+        SELECT ca.character_id, a.*
+        FROM character_affiliations ca
+        JOIN affiliations a ON a.id = ca.affiliation_id
+        JOIN characters c ON c.id = ca.character_id
+        WHERE c.series IS NULL
+      ''');
+    } else {
+      rows = await db.rawQuery('''
+        SELECT ca.character_id, a.*
+        FROM character_affiliations ca
+        JOIN affiliations a ON a.id = ca.affiliation_id
+        JOIN characters c ON c.id = ca.character_id
+        WHERE c.series IS NULL OR c.series = ?
+      ''', [series]);
+    }
+    final out = <int, List<Affiliation>>{};
+    for (final r in rows) {
+      final cid = r['character_id'] as int;
+      (out[cid] ??= []).add(Affiliation.fromMap(r));
+    }
+    return out;
+  }
+
+  Future<void> linkAffiliation({
+    required int characterId,
+    required int affiliationId,
+  }) async {
+    final db = await _db;
+    await db.insert(
+      'character_affiliations',
+      {'character_id': characterId, 'affiliation_id': affiliationId},
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+    await _touchCharacter(characterId);
+  }
+
+  Future<void> unlinkAffiliation({
+    required int characterId,
+    required int affiliationId,
+  }) async {
+    final db = await _db;
+    await db.delete(
+      'character_affiliations',
+      where: 'character_id = ? AND affiliation_id = ?',
+      whereArgs: [characterId, affiliationId],
+    );
+    await _touchCharacter(characterId);
+  }
+
   Future<Character?> findByNameOrAlias(
     String name, {
     String? series,

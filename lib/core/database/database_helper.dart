@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'book_reader.db';
-  static const _dbVersion = 10;
+  static const _dbVersion = 11;
 
   Database? _db;
 
@@ -114,6 +114,40 @@ class DatabaseHelper {
       'ON character_descriptions(character_id)',
     );
     await _createCharacterAliasesTable(db);
+    await _createAffiliationTables(db);
+  }
+
+  Future<void> _createAffiliationTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS affiliations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        series TEXT,
+        created_at INTEGER NOT NULL,
+        UNIQUE(name, series)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS character_affiliations (
+        character_id INTEGER NOT NULL,
+        affiliation_id INTEGER NOT NULL,
+        PRIMARY KEY (character_id, affiliation_id),
+        FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
+        FOREIGN KEY (affiliation_id) REFERENCES affiliations(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_affiliations_series '
+      'ON affiliations(series)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_char_affs_character '
+      'ON character_affiliations(character_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_char_affs_affiliation '
+      'ON character_affiliations(affiliation_id)',
+    );
   }
 
   Future<void> _createCharacterAliasesTable(Database db) async {
@@ -229,6 +263,9 @@ class DatabaseHelper {
         'UPDATE characters SET updated_at = created_at '
         'WHERE updated_at IS NULL',
       );
+    }
+    if (oldVersion < 11) {
+      await _createAffiliationTables(db);
     }
   }
 }
