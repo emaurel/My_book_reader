@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../domain/book.dart';
 import '../providers/library_provider.dart';
+import 'widgets/book_edit_sheet.dart';
 import 'widgets/book_grid_item.dart';
 import 'widgets/book_info_sheet.dart';
 
@@ -14,23 +15,12 @@ class LibraryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final library = ref.watch(libraryProvider);
-    final sort = ref.watch(librarySortProvider);
 
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/'),
       appBar: AppBar(
         title: const Text('Library'),
         actions: [
-          PopupMenuButton<LibrarySort>(
-            tooltip: 'Sort',
-            icon: const Icon(Icons.sort),
-            initialValue: sort,
-            onSelected: (s) =>
-                ref.read(librarySortProvider.notifier).state = s,
-            itemBuilder: (_) => LibrarySort.values
-                .map((s) => PopupMenuItem(value: s, child: Text(s.label)))
-                .toList(),
-          ),
           IconButton(
             icon: const Icon(Icons.travel_explore),
             tooltip: 'Scan device for books',
@@ -59,24 +49,10 @@ class LibraryScreen extends ConsumerWidget {
           if (books.isEmpty) return const _EmptyState();
           return RefreshIndicator(
             onRefresh: () => ref.read(libraryProvider.notifier).refresh(),
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-              gridDelegate:
-                  const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 160,
-                childAspectRatio: 0.55,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: books.length,
-              itemBuilder: (_, i) {
-                final book = books[i];
-                return BookGridItem(
-                  book: book,
-                  onTap: () => context.push('/read/${book.id}'),
-                  onLongPress: () => _showBookActions(context, ref, book),
-                );
-              },
+            child: _SeriesGroupedLibrary(
+              books: books,
+              onOpen: (book) => context.push('/read/${book.id}'),
+              onLongPress: (book) => _showBookActions(context, ref, book),
             ),
           );
         },
@@ -229,6 +205,14 @@ class LibraryScreen extends ConsumerWidget {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Edit info'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                showBookEditSheet(context, book: book);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.delete_outline),
               title: const Text('Remove from library'),
               onTap: () async {
@@ -243,6 +227,98 @@ class LibraryScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Library list grouped by `Book.series` (with a trailing "Other" group
+/// for books without a series). Each group is a collapsible
+/// ExpansionTile; books inside are sorted by `seriesNumber` ascending,
+/// with un-numbered books falling back to alphabetical title order.
+class _SeriesGroupedLibrary extends StatelessWidget {
+  const _SeriesGroupedLibrary({
+    required this.books,
+    required this.onOpen,
+    required this.onLongPress,
+  });
+
+  final List<Book> books;
+  final void Function(Book) onOpen;
+  final void Function(Book) onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final groups = <String?, List<Book>>{};
+    for (final book in books) {
+      final raw = book.series?.trim();
+      final key = (raw == null || raw.isEmpty) ? null : raw;
+      (groups[key] ??= []).add(book);
+    }
+    for (final list in groups.values) {
+      list.sort((a, b) {
+        final an = a.seriesNumber;
+        final bn = b.seriesNumber;
+        if (an != null && bn != null) return an.compareTo(bn);
+        if (an != null) return -1;
+        if (bn != null) return 1;
+        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    }
+    final keys = groups.keys.toList()
+      ..sort((a, b) {
+        if (a == null && b == null) return 0;
+        if (a == null) return 1; // Other last
+        if (b == null) return -1;
+        return a.toLowerCase().compareTo(b.toLowerCase());
+      });
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
+      children: [
+        for (final series in keys)
+          Theme(
+            // Hide the default ExpansionTile divider so the group
+            // header blends with the grid below.
+            data: theme.copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: true,
+              tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+              childrenPadding: EdgeInsets.zero,
+              title: Text(
+                (series ?? 'Other').toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              children: [
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                  gridDelegate:
+                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 160,
+                    childAspectRatio: 0.55,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: groups[series]!.length,
+                  itemBuilder: (_, i) {
+                    final book = groups[series]![i];
+                    return BookGridItem(
+                      book: book,
+                      onTap: () => onOpen(book),
+                      onLongPress: () => onLongPress(book),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

@@ -19,6 +19,11 @@ class DrawerEntry {
 /// and create the matching `GoRoute` in `app_router.dart`.
 const List<DrawerEntry> mainDrawerEntries = [
   DrawerEntry(
+    icon: Icons.auto_stories_outlined,
+    label: 'Continue reading',
+    routePath: '/current',
+  ),
+  DrawerEntry(
     icon: Icons.menu_book_outlined,
     label: 'Library',
     routePath: '/',

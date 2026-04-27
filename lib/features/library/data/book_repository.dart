@@ -14,6 +14,19 @@ class BookRepository {
     return rows.map(Book.fromMap).toList();
   }
 
+  /// Books the user has started but not yet finished, sorted with the
+  /// most recently opened first. Drives the "Continue reading" screen.
+  Future<List<Book>> getCurrentReadings() async {
+    final db = await _db;
+    final rows = await db.query(
+      'books',
+      where: 'last_opened_at IS NOT NULL '
+          'AND progress > 0 AND progress < 1',
+      orderBy: 'last_opened_at DESC',
+    );
+    return rows.map(Book.fromMap).toList();
+  }
+
   Future<Book?> getById(int id) async {
     final db = await _db;
     final rows = await db.query(

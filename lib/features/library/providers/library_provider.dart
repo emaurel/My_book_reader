@@ -50,6 +50,15 @@ extension LibrarySortLabel on LibrarySort {
 final librarySortProvider =
     StateProvider<LibrarySort>((_) => LibrarySort.recentlyAdded);
 
+/// Books the user has started but not yet finished. Recomputed off the
+/// main library list so that progress updates flow through.
+final currentReadingsProvider = FutureProvider<List<Book>>((ref) async {
+  // Watch the main library so that adding/removing/refreshing a book
+  // invalidates this list too.
+  await ref.watch(libraryProvider.future);
+  return ref.read(bookRepositoryProvider).getCurrentReadings();
+});
+
 const _showDocumentsKey = 'library.showDocuments';
 
 /// When false (default), the library hides PDF and TXT files and the
