@@ -38,6 +38,7 @@ dependencies:
   flutter_svg: ^2.0.10
   wakelock_plus: ^1.2.5
   kindle_unpack: ^0.1.1
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_lints: ^4.0.0

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../characters/presentation/widgets/add_character_description_sheet.dart';
 import '../../citations/providers/citation_provider.dart';
@@ -57,6 +58,22 @@ final selectionActionsProvider = Provider<List<SelectionAction>>((ref) {
           bookSeries: ctx.bookSeries,
         );
         return saved == true ? 'Saved character description' : null;
+      },
+    ),
+    SelectionAction(
+      icon: Icons.translate,
+      label: 'Translate',
+      onTap: (context, ref, ctx) async {
+        final encoded = Uri.encodeComponent(ctx.text);
+        final url = Uri.parse(
+          'https://translate.google.com/'
+          '?sl=auto&tl=en&op=translate&text=$encoded',
+        );
+        final ok = await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication,
+        );
+        return ok ? null : 'Could not open translator';
       },
     ),
   ];
