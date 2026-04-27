@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../main.dart';
@@ -130,6 +133,47 @@ class LibraryNotifier extends AsyncNotifier<List<Book>> {
 
     if (added > 0) ref.invalidateSelf();
     return added;
+  }
+
+  /// Register a file that's already on disk in `app_documents/library/`
+  /// (e.g. dropped there by the Anna's Archive download interceptor).
+  /// Runs the same Kindle-conversion + metadata hydration as the picker
+  /// flow. Returns true if a new book was added, false if the file's
+  /// already in the library or its format is unsupported.
+  Future<bool> addFromFile(String filePath) async {
+    final repo = ref.read(bookRepositoryProvider);
+    final ext =
+        p.extension(filePath).replaceAll('.', '').toLowerCase();
+    final format = BookFormat.fromExtension(ext);
+    if (format == null) return false;
+
+    final size = await File(filePath).length();
+    final title = p.basenameWithoutExtension(filePath);
+
+    final file = await _maybeConvertKindle(
+      path: filePath,
+      title: title,
+      format: format,
+      sizeBytes: size,
+    );
+
+    final existing = await repo.getByPath(file.path);
+    if (existing != null) return false;
+
+    final converted = file.format != format;
+    final id = await repo.insert(
+      Book(
+        title: file.title,
+        filePath: file.path,
+        format: file.format,
+        fileSize: file.sizeBytes,
+        addedAt: DateTime.now(),
+        originalPath: converted ? filePath : null,
+      ),
+    );
+    await _hydrateMetadata(id, file.path, file.format);
+    ref.invalidateSelf();
+    return true;
   }
 
   Future<int> scanDevice() async {

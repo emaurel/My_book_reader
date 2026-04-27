@@ -43,6 +43,11 @@ const List<DrawerEntry> mainDrawerEntries = [
     label: 'Characters',
     routePath: '/characters',
   ),
+  DrawerEntry(
+    icon: Icons.cloud_download_outlined,
+    label: 'Download books',
+    routePath: '/downloads',
+  ),
 ];
 
 class MainDrawer extends StatelessWidget {
