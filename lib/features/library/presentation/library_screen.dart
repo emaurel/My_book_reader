@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/navigation/main_drawer.dart';
+import '../../bundles/presentation/widgets/share_bundle_dialog.dart';
 import '../domain/book.dart';
 import '../providers/library_provider.dart';
 import 'widgets/book_edit_sheet.dart';
@@ -53,6 +54,8 @@ class LibraryScreen extends ConsumerWidget {
               books: books,
               onOpen: (book) => context.push('/read/${book.id}'),
               onLongPress: (book) => _showBookActions(context, ref, book),
+              onSeriesLongPress: (name, list) =>
+                  _showSeriesActions(context, name, list),
             ),
           );
         },
@@ -172,10 +175,53 @@ class LibraryScreen extends ConsumerWidget {
     }
   }
 
+  void _showSeriesActions(
+    BuildContext context,
+    String seriesName,
+    List<Book> seriesBooks,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                seriesName,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                '${seriesBooks.length} book'
+                '${seriesBooks.length == 1 ? '' : 's'} in series',
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text('Share series bundle'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                showShareSeriesBundleDialog(
+                  context,
+                  seriesName: seriesName,
+                  books: seriesBooks,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showBookActions(BuildContext context, WidgetRef ref, Book book) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -213,6 +259,14 @@ class LibraryScreen extends ConsumerWidget {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text('Share book bundle'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                showShareBundleDialog(context, book);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.delete_outline),
               title: const Text('Remove from library'),
               onTap: () async {
@@ -240,11 +294,14 @@ class _SeriesGroupedLibrary extends StatelessWidget {
     required this.books,
     required this.onOpen,
     required this.onLongPress,
+    required this.onSeriesLongPress,
   });
 
   final List<Book> books;
   final void Function(Book) onOpen;
   final void Function(Book) onLongPress;
+  final void Function(String seriesName, List<Book> seriesBooks)
+      onSeriesLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -285,12 +342,18 @@ class _SeriesGroupedLibrary extends StatelessWidget {
               initiallyExpanded: true,
               tilePadding: const EdgeInsets.symmetric(horizontal: 4),
               childrenPadding: EdgeInsets.zero,
-              title: Text(
-                (series ?? 'Other').toUpperCase(),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
+              title: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onLongPress: series != null
+                    ? () => onSeriesLongPress(series, groups[series]!)
+                    : null,
+                child: Text(
+                  (series ?? 'Other').toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
                 ),
               ),
               children: [

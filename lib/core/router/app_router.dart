@@ -5,6 +5,7 @@ import '../../features/characters/presentation/characters_screen.dart';
 import '../../features/citations/presentation/citations_screen.dart';
 import '../../features/backup/presentation/backup_screen.dart';
 import '../../features/book_links/presentation/links_screen.dart';
+import '../../features/bundles/presentation/import_bundle_screen.dart';
 import '../../features/dictionary/presentation/dictionaries_screen.dart';
 import '../../features/downloads/presentation/download_books_screen.dart';
 import '../../features/notes/presentation/notes_screen.dart';
@@ -72,6 +73,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/backup',
         name: 'backup',
         builder: (_, __) => const BackupScreen(),
+      ),
+      GoRoute(
+        path: '/import-bundle',
+        name: 'import_bundle',
+        builder: (_, __) => const ImportBundleScreen(),
       ),
       GoRoute(
         path: '/settings',

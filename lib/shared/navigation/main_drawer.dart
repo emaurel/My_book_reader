@@ -63,6 +63,11 @@ const List<DrawerEntry> mainDrawerEntries = [
     label: 'Backup & restore',
     routePath: '/backup',
   ),
+  DrawerEntry(
+    icon: Icons.unarchive_outlined,
+    label: 'Import bundle',
+    routePath: '/import-bundle',
+  ),
 ];
 
 /// Footer entries pinned to the bottom of the drawer with a divider
