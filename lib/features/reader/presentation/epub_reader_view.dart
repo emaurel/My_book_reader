@@ -67,6 +67,7 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
   ReaderSettings? _appliedSettings;
   _Selection? _selection;
   _TappedCitation? _tappedCitation;
+  Map<String, epubx.EpubByteContentFile> _images = const {};
 
   @override
   void initState() {
@@ -115,6 +116,7 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
       _chapters = chapters;
       _chapterIndex = initialChapter;
       _pageInChapter = initialPage;
+      _images = book.Content?.Images ?? const {};
       await _renderCurrentChapter(initialPage: initialPage);
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -223,7 +225,7 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
     final fg = _hex(s.theme.foreground);
     final bg = _hex(s.theme.background);
     final padding = s.horizontalPadding;
-    final body = _sanitize(chapterHtml);
+    final body = _inlineImages(_sanitize(chapterHtml));
 
     final gap = padding * 2;
     return '''
@@ -1090,6 +1092,102 @@ $body
   String _hex(Color c) {
     final v = c.toARGB32() & 0xFFFFFF;
     return '#${v.toRadixString(16).padLeft(6, '0')}';
+  }
+
+  /// Replace `<img src="...">` references in chapter HTML with inline
+  /// `data:` URIs so the WebView (which can't reach into the EPUB zip)
+  /// renders them. Image lookup is by exact key first, then by basename
+  /// — paths inside chapter HTML are usually relative to the OPF and
+  /// don't always match `Content.Images` keys verbatim.
+  static final _imgTagRe = RegExp(r'<img\b[^>]*>', caseSensitive: false);
+  static final _srcAttrRe = RegExp(
+    "src\\s*=\\s*['\"]([^'\"]+)['\"]",
+    caseSensitive: false,
+  );
+
+  final Map<String, String> _dataUriCache = {};
+
+  String _inlineImages(String html) {
+    if (_images.isEmpty) return html;
+    return html.replaceAllMapped(_imgTagRe, (m) {
+      final tag = m.group(0)!;
+      final src = _srcAttrRe.firstMatch(tag);
+      if (src == null) return tag;
+      final original = src.group(1)!;
+      final dataUri = _dataUriCache.putIfAbsent(
+        original,
+        () => _toDataUri(original),
+      );
+      if (dataUri.isEmpty) return tag;
+      return tag.replaceFirst(src.group(0)!, 'src="$dataUri"');
+    });
+  }
+
+  String _toDataUri(String src) {
+    // MOBI / KF8 internal scheme: <img src="kindle:embed:0001?mime=...">.
+    // kindle_unpack passes these through unchanged, so we resolve them
+    // here by looking up the matching `imageNNNNN.<ext>` it emitted.
+    final kindle =
+        RegExp(r'^kindle:embed:(\d+)', caseSensitive: false).firstMatch(src);
+    if (kindle != null) {
+      final n = int.tryParse(kindle.group(1) ?? '');
+      if (n != null && n >= 0) {
+        // Try N-1 then N (1-based vs 0-based ambiguity), each across a
+        // few common extensions. Then a positional fallback into the
+        // sorted image list.
+        for (final offset in [-1, 0]) {
+          final idx = n + offset;
+          if (idx < 0) continue;
+          final base = 'image${idx.toString().padLeft(5, '0')}';
+          for (final ext in const ['.jpg', '.jpeg', '.png', '.gif']) {
+            final candidate = '$base$ext';
+            final found = _findImageByBasename(candidate);
+            if (found != null) return _encodeFile(found, candidate);
+          }
+        }
+        final sorted = _images.entries.toList()
+          ..sort((a, b) => a.key.compareTo(b.key));
+        if (n - 1 >= 0 && n - 1 < sorted.length) {
+          return _encodeFile(sorted[n - 1].value, sorted[n - 1].key);
+        }
+      }
+      return '';
+    }
+
+    final clean = src.split('?').first.split('#').first;
+    final basename = clean.split('/').last;
+    var found = _images[clean] ?? _images[basename];
+    found ??= _findImageByBasename(basename);
+    if (found == null) return '';
+    return _encodeFile(found, basename);
+  }
+
+  epubx.EpubByteContentFile? _findImageByBasename(String basename) {
+    final lower = basename.toLowerCase();
+    for (final entry in _images.entries) {
+      final key = entry.key.toLowerCase();
+      if (key.endsWith('/$lower') || key == lower) return entry.value;
+    }
+    return null;
+  }
+
+  String _encodeFile(epubx.EpubByteContentFile file, String hintName) {
+    final bytes = file.Content;
+    if (bytes == null || bytes.isEmpty) return '';
+    final mime = file.ContentMimeType?.isNotEmpty == true
+        ? file.ContentMimeType!
+        : _mimeFromName(hintName);
+    return 'data:$mime;base64,${base64Encode(bytes)}';
+  }
+
+  String _mimeFromName(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.svg')) return 'image/svg+xml';
+    return 'application/octet-stream';
   }
 
   String _sanitize(String html) {
