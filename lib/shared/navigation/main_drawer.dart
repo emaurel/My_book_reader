@@ -48,6 +48,11 @@ const List<DrawerEntry> mainDrawerEntries = [
     label: 'Download books',
     routePath: '/downloads',
   ),
+  DrawerEntry(
+    icon: Icons.backup_outlined,
+    label: 'Backup & restore',
+    routePath: '/backup',
+  ),
 ];
 
 class MainDrawer extends StatelessWidget {

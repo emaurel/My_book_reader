@@ -9,6 +9,10 @@ class DatabaseHelper {
   static const _dbName = 'book_reader.db';
   static const _dbVersion = 11;
 
+  /// Exposed for the backup service so it can reject backups taken on
+  /// future app versions whose DB schema we don't yet understand.
+  static int get dbVersion => _dbVersion;
+
   Database? _db;
 
   Future<Database> get database async {
@@ -26,6 +30,14 @@ class DatabaseHelper {
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+  }
+
+  /// Close the underlying SQLite handle so its file can be deleted /
+  /// replaced (used by the backup-restore flow). The next call to
+  /// [database] will reopen the file.
+  Future<void> close() async {
+    await _db?.close();
+    _db = null;
   }
 
   Future<void> _onCreate(Database db, int version) async {
