@@ -23,6 +23,21 @@ const List<DrawerEntry> mainDrawerEntries = [
     label: 'Library',
     routePath: '/',
   ),
+  DrawerEntry(
+    icon: Icons.format_quote_outlined,
+    label: 'Citations',
+    routePath: '/citations',
+  ),
+  DrawerEntry(
+    icon: Icons.menu_book_outlined,
+    label: 'Dictionaries',
+    routePath: '/dictionaries',
+  ),
+  DrawerEntry(
+    icon: Icons.person_outline,
+    label: 'Characters',
+    routePath: '/characters',
+  ),
 ];
 
 class MainDrawer extends StatelessWidget {

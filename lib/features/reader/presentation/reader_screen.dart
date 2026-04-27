@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../citations/providers/citation_provider.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../providers/reader_controls_provider.dart';
@@ -16,9 +17,14 @@ import 'pdf_reader_view.dart';
 import 'txt_reader_view.dart';
 
 class ReaderScreen extends ConsumerStatefulWidget {
-  const ReaderScreen({super.key, required this.bookId});
+  const ReaderScreen({super.key, required this.bookId, this.citationId});
 
   final int bookId;
+
+  /// When non-null, the reader opens at the citation's location and
+  /// runs in **preview mode**: progress is not persisted, so jumping to
+  /// a citation doesn't disturb the user's saved reading position.
+  final int? citationId;
 
   @override
   ConsumerState<ReaderScreen> createState() => _ReaderScreenState();
@@ -29,6 +35,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _loading = true;
   String? _error;
   bool _chromeVisible = true;
+  bool _previewMode = false;
+  int? _previewCitationId;
 
   @override
   void initState() {
@@ -64,12 +72,43 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Future<void> _load() async {
     try {
       final repo = ref.read(bookRepositoryProvider);
-      final book = await repo.getById(widget.bookId);
+      Book? book = await repo.getById(widget.bookId);
+      if (book == null) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = 'Book not found';
+        });
+        return;
+      }
+
+      var preview = false;
+      int? previewCitationId;
+      if (widget.citationId != null) {
+        final citation = await ref
+            .read(citationRepositoryProvider)
+            .getById(widget.citationId!);
+        if (citation != null && citation.chapterIndex != null) {
+          // Override the saved position so the reader opens at the
+          // citation's chapter. The viewer then navigates within the
+          // chapter to the page containing the highlight.
+          book = book.copyWith(
+            position: {
+              'chapter': citation.chapterIndex,
+              'page': 0,
+            },
+          );
+          preview = true;
+          previewCitationId = citation.id;
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         _book = book;
+        _previewMode = preview;
+        _previewCitationId = previewCitationId;
         _loading = false;
-        _error = book == null ? 'Book not found' : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -167,7 +206,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final book = _book!;
     switch (book.format) {
       case BookFormat.epub:
-        return EpubReaderView(book: book, onMenuTap: _toggleChrome);
+        return EpubReaderView(
+          book: book,
+          onMenuTap: _toggleChrome,
+          previewMode: _previewMode,
+          previewCitationId: _previewCitationId,
+        );
       case BookFormat.pdf:
         return PdfReaderView(book: book);
       case BookFormat.txt:

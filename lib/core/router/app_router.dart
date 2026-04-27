@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/characters/presentation/characters_screen.dart';
+import '../../features/citations/presentation/citations_screen.dart';
+import '../../features/dictionary/presentation/dictionaries_screen.dart';
 import '../../features/library/presentation/library_screen.dart';
 import '../../features/reader/presentation/reader_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
@@ -19,8 +22,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'reader',
         builder: (context, state) {
           final id = int.parse(state.pathParameters['id']!);
-          return ReaderScreen(bookId: id);
+          final citationId =
+              int.tryParse(state.uri.queryParameters['citation'] ?? '');
+          return ReaderScreen(bookId: id, citationId: citationId);
         },
+      ),
+      GoRoute(
+        path: '/citations',
+        name: 'citations',
+        builder: (_, __) => const CitationsScreen(),
+      ),
+      GoRoute(
+        path: '/dictionaries',
+        name: 'dictionaries',
+        builder: (_, __) => const DictionariesScreen(),
+      ),
+      GoRoute(
+        path: '/characters',
+        name: 'characters',
+        builder: (_, __) => const CharactersScreen(),
       ),
       GoRoute(
         path: '/settings',
