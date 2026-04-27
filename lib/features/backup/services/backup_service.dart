@@ -20,6 +20,8 @@ const _backedUpPrefKeys = <String>[
   'reader.fontFamily',
   'reader.theme',
   'reader.keepScreenOn',
+  'book_links.graph_positions',
+  'book_links.graph_transform',
 ];
 
 const _dbFilename = 'book_reader.db';

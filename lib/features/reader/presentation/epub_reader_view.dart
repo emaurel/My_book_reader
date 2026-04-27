@@ -7,12 +7,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../characters/presentation/widgets/character_descriptions_sheet.dart';
 import '../../characters/providers/character_provider.dart';
+import '../../book_links/providers/book_link_provider.dart';
 import '../../citations/providers/citation_provider.dart';
 import '../../dictionary/presentation/widgets/definition_sheet.dart';
 import '../../dictionary/providers/dictionary_provider.dart';
@@ -287,6 +289,13 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
      from cu-dict (dotted blue) and cu-cite (solid amber). */
   .cu-char {
     border-bottom: 1.5px dashed rgba(60, 160, 100, 0.9);
+    cursor: pointer;
+  }
+  /* Cross-book link — bold red, no underline. Tap to open the target
+     book. Distinct from the underline-based annotations above. */
+  .cu-link {
+    color: rgb(200, 30, 40);
+    font-weight: bold;
     cursor: pointer;
   }
   /* Outer hitbox is 44px (Material minimum touch target). The visible
@@ -693,6 +702,65 @@ $body
     document.body.normalize();
   };
 
+  // ===== Cross-book links (red bold) =====
+  function unwrapAllLinks() {
+    var spans = document.querySelectorAll('span.cu-link');
+    for (var i = 0; i < spans.length; i++) {
+      var span = spans[i];
+      var parent = span.parentNode;
+      if (!parent) continue;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+    }
+    document.body.normalize();
+  }
+
+  function wrapLink(id, start, end) {
+    if (start == null || end == null || start >= end) return;
+    var s = nodeAtOffset(start);
+    var e = nodeAtOffset(end);
+    if (!s || !e) return;
+    var range = document.createRange();
+    try { range.setStart(s.node, s.offset); range.setEnd(e.node, e.offset); }
+    catch (_) { return; }
+    var fragments = [];
+    var iter = document.createNodeIterator(
+      range.commonAncestorContainer,
+      NodeFilter.SHOW_TEXT,
+      function(node) {
+        return range.intersectsNode(node)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT;
+      }
+    );
+    var node;
+    while ((node = iter.nextNode())) {
+      var fStart = (node === range.startContainer) ? range.startOffset : 0;
+      var fEnd = (node === range.endContainer)
+        ? range.endOffset : node.textContent.length;
+      if (fStart < fEnd) fragments.push({node: node, start: fStart, end: fEnd});
+    }
+    for (var i = fragments.length - 1; i >= 0; i--) {
+      var f = fragments[i];
+      var sub = document.createRange();
+      try { sub.setStart(f.node, f.start); sub.setEnd(f.node, f.end); }
+      catch (_) { continue; }
+      var span = document.createElement('span');
+      span.className = 'cu-link';
+      span.setAttribute('data-link-id', String(id));
+      try { sub.surroundContents(span); } catch (_) {}
+    }
+  }
+
+  window.applyLinkHighlights = function(arr) {
+    unwrapAllLinks();
+    if (!arr || arr.length === 0) return;
+    arr.sort(function(a, b) { return a.start - b.start; });
+    for (var i = 0; i < arr.length; i++) {
+      wrapLink(arr[i].id, arr[i].start, arr[i].end);
+    }
+  };
+
   // ===== Character name underlines =====
   function unwrapAllCharacters() {
     var spans = document.querySelectorAll('span.cu-char');
@@ -1049,6 +1117,14 @@ $body
           }));
           return;
         }
+        if (t.classList.contains('cu-link')) {
+          var linkIdAttr = t.getAttribute('data-link-id');
+          Selection.postMessage(JSON.stringify({
+            type: 'link_tap',
+            id: parseInt(linkIdAttr, 10),
+          }));
+          return;
+        }
       }
       t = t.parentNode;
     }
@@ -1253,6 +1329,12 @@ $body
         return;
       }
 
+      if (type == 'link_tap') {
+        final id = (data['id'] as num).toInt();
+        _onLinkTap(id);
+        return;
+      }
+
       if (type != 'changed') {
         if (_selection != null || _tappedCitation != null) {
           setState(() {
@@ -1290,6 +1372,41 @@ $body
     await _applyCitationsForCurrentChapter();
     await _applyDictionaryHighlightsForCurrentChapter();
     await _applyCharacterHighlightsForCurrentChapter();
+    await _applyLinksForCurrentChapter();
+  }
+
+  Future<void> _applyLinksForCurrentChapter() async {
+    if (widget.book.id == null) return;
+    final links = await ref
+        .read(bookLinkRepositoryProvider)
+        .getBySourceBook(widget.book.id!);
+    final payload = links
+        .where(
+          (l) =>
+              l.sourceChapterIndex == _chapterIndex &&
+              l.sourceCharStart != null &&
+              l.sourceCharEnd != null,
+        )
+        .map((l) => {
+              'id': l.id,
+              'start': l.sourceCharStart,
+              'end': l.sourceCharEnd,
+            })
+        .toList();
+    await _web.runJavaScript(
+      'applyLinkHighlights(${jsonEncode(payload)});',
+    );
+  }
+
+  Future<void> _onLinkTap(int linkId) async {
+    final repo = ref.read(bookLinkRepositoryProvider);
+    final links = await repo.getAll();
+    final link = links.firstWhere(
+      (l) => l.id == linkId,
+      orElse: () => links.first,
+    );
+    if (!mounted) return;
+    context.push('/read/${link.targetBookId}');
   }
 
   Future<void> _applyDictionaryHighlightsForCurrentChapter() async {

@@ -44,6 +44,11 @@ const List<DrawerEntry> mainDrawerEntries = [
     routePath: '/characters',
   ),
   DrawerEntry(
+    icon: Icons.link,
+    label: 'Links',
+    routePath: '/links',
+  ),
+  DrawerEntry(
     icon: Icons.cloud_download_outlined,
     label: 'Download books',
     routePath: '/downloads',

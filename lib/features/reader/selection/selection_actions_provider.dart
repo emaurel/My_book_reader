@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../book_links/presentation/widgets/link_book_picker_sheet.dart';
+import '../../book_links/providers/book_link_provider.dart';
 import '../../characters/presentation/widgets/add_character_description_sheet.dart';
 import '../../citations/providers/citation_provider.dart';
 import '../../dictionary/presentation/widgets/add_to_dictionary_sheet.dart';
@@ -58,6 +60,27 @@ final selectionActionsProvider = Provider<List<SelectionAction>>((ref) {
           bookSeries: ctx.bookSeries,
         );
         return saved == true ? 'Saved character description' : null;
+      },
+    ),
+    SelectionAction(
+      icon: Icons.link,
+      label: 'Link',
+      onTap: (context, ref, ctx) async {
+        if (ctx.bookId == null) return 'Open a book to link';
+        final pickedBookId = await showLinkBookPickerSheet(
+          context,
+          excludeBookId: ctx.bookId!,
+        );
+        if (pickedBookId == null) return null;
+        await ref.read(bookLinksProvider.notifier).add(
+              sourceBookId: ctx.bookId!,
+              sourceChapterIndex: ctx.chapterIndex,
+              sourceCharStart: ctx.charStart,
+              sourceCharEnd: ctx.charEnd,
+              targetBookId: pickedBookId,
+              label: ctx.text,
+            );
+        return 'Linked';
       },
     ),
     SelectionAction(

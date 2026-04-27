@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/characters/presentation/characters_screen.dart';
 import '../../features/citations/presentation/citations_screen.dart';
 import '../../features/backup/presentation/backup_screen.dart';
+import '../../features/book_links/presentation/links_screen.dart';
 import '../../features/dictionary/presentation/dictionaries_screen.dart';
 import '../../features/downloads/presentation/download_books_screen.dart';
 import '../../features/library/presentation/current_readings_screen.dart';
@@ -49,6 +50,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/characters',
         name: 'characters',
         builder: (_, __) => const CharactersScreen(),
+      ),
+      GoRoute(
+        path: '/links',
+        name: 'links',
+        builder: (_, __) => const LinksScreen(),
       ),
       GoRoute(
         path: '/downloads',
