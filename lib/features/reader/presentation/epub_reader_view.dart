@@ -119,14 +119,83 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ref.read(readerControlsProvider.notifier).state = ReaderControls(
-          goPrev: _goPrev,
-          goNext: _goNext,
-        );
+        _publishControls();
       });
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not open EPUB: $e');
     }
+  }
+
+  void _publishControls() {
+    ref.read(readerControlsProvider.notifier).state = ReaderControls(
+      goPrev: _goPrev,
+      goNext: _goNext,
+      jumpToChapter: _jumpToChapter,
+      chapterTitles: [
+        for (final c in _chapters) _bestChapterTitle(c),
+      ],
+      currentChapterIndex: _chapterIndex,
+    );
+  }
+
+  /// Resolve a usable display title for a chapter. The NCX label is
+  /// preferred unless it's generic (e.g. "Part 1" — what kindle_unpack
+  /// emits when the source AZW3 didn't carry an explicit title), in
+  /// which case we fall back to the first heading in the chapter HTML.
+  String _bestChapterTitle(epubx.EpubChapter c) {
+    final navTitle = (c.Title ?? '').trim();
+    final navIsGeneric = _isGenericChapterLabel(navTitle);
+    if (navTitle.isNotEmpty && !navIsGeneric) return navTitle;
+    final fromHtml = _firstHeadingText(c.HtmlContent ?? '');
+    if (fromHtml != null && fromHtml.isNotEmpty) return fromHtml;
+    return navTitle.isEmpty ? 'Untitled' : navTitle;
+  }
+
+  static final _genericLabel = RegExp(
+    r'^(part|chapter|section|ch)\s*[ivxlcdm0-9]+\s*\.?$',
+    caseSensitive: false,
+  );
+
+  bool _isGenericChapterLabel(String s) =>
+      s.isEmpty || _genericLabel.hasMatch(s);
+
+  static final _headingRe = RegExp(
+    r'<h[1-3][^>]*>([\s\S]*?)</h[1-3]>',
+    caseSensitive: false,
+  );
+  static final _tagStripRe = RegExp(r'<[^>]+>');
+  static final _wsRe = RegExp(r'\s+');
+
+  String? _firstHeadingText(String html) {
+    final m = _headingRe.firstMatch(html);
+    if (m == null) return null;
+    var text = m.group(1) ?? '';
+    text = text.replaceAll(_tagStripRe, ' ');
+    text = _decodeEntities(text);
+    text = text.replaceAll(_wsRe, ' ').trim();
+    if (text.isEmpty) return null;
+    // Don't fall through to a heading that's itself generic.
+    if (_isGenericChapterLabel(text)) return null;
+    return text;
+  }
+
+  String _decodeEntities(String s) => s
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&apos;', "'")
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&#8217;', '’')
+      .replaceAll('&#8216;', '‘');
+
+  Future<void> _jumpToChapter(int index) async {
+    if (index < 0 || index >= _chapters.length) return;
+    if (index == _chapterIndex) return;
+    _chapterIndex = index;
+    await _renderCurrentChapter(initialPage: 0);
+    _publishControls();
   }
 
   List<epubx.EpubChapter> _flattenChapters(List<epubx.EpubChapter> input) {
@@ -266,14 +335,61 @@ $body
     var s = document.scrollingElement || document.documentElement;
     return Math.round((s.scrollLeft || document.body.scrollLeft) / w());
   }
-  function gotoPage(p) {
+  function _scrollTarget() {
+    return document.scrollingElement || document.documentElement;
+  }
+
+  function _setScrollLeftInstant(x) {
+    if (_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
+    var s = _scrollTarget();
+    s.scrollLeft = x;
+    document.body.scrollLeft = x;
+  }
+
+  // Page-flip animation: snap scrollLeft to the new page instantly,
+  // then animate body's translateX from the old offset back to 0. This
+  // makes the body literally slide on screen — forward = leftwards,
+  // backward = rightwards — so the direction is visually unmistakable.
+  var _animFrame = null;
+  var ANIM_MS = 120;
+
+  function gotoPage(p, animate) {
     if (typeof clearActiveSelection === 'function') clearActiveSelection();
     var t = Math.max(0, Math.min(totalPages() - 1, p));
     var x = t * w();
-    var s = document.scrollingElement || document.documentElement;
+    var s = _scrollTarget();
+    var oldX = s.scrollLeft || document.body.scrollLeft || 0;
+    var dx = x - oldX;
+
+    if (animate === false || dx === 0) {
+      _setScrollLeftInstant(x);
+      reportPage();
+      return t;
+    }
+
+    if (_animFrame) { cancelAnimationFrame(_animFrame); _animFrame = null; }
+
+    // Snap to the destination, then offset the body so it visually
+    // starts where it was and animate the offset back to 0.
     s.scrollLeft = x;
     document.body.scrollLeft = x;
-    return curPage();
+
+    var startTime = performance.now();
+    function step(now) {
+      var pp = Math.min(1, (now - startTime) / ANIM_MS);
+      var ease = 1 - Math.pow(1 - pp, 3); // ease-out cubic
+      var tx = dx * (1 - ease);
+      document.body.style.transform = 'translateX(' + tx + 'px)';
+      if (pp < 1) {
+        _animFrame = requestAnimationFrame(step);
+      } else {
+        _animFrame = null;
+        document.body.style.transform = '';
+        reportPage();
+      }
+    }
+    _animFrame = requestAnimationFrame(step);
+    return t;
   }
   function reportPage() {
     Page.postMessage(JSON.stringify({page: curPage(), total: totalPages()}));
@@ -842,10 +958,20 @@ $body
     }, { passive: false });
   }
 
+  // Swipe detection: deltas measured between touchstart and touchend
+  // on the body. Disabled while dragging a selection handle or while
+  // there's an active selection (so handle drags / tap-to-dismiss don't
+  // accidentally turn pages).
+  var SWIPE_MIN_X = 50;
+  var SWIPE_MAX_DURATION_MS = 600;
+  var SWIPE_VERTICAL_RATIO = 0.6;
+  var swipeStart = null;
+
   document.addEventListener('touchstart', function(e) {
     if (draggingHandle || e.touches.length !== 1) return;
     var t = e.touches[0];
     pressStart = {x: t.clientX, y: t.clientY};
+    swipeStart = {x: t.clientX, y: t.clientY, time: Date.now()};
     if (longPressTimer) clearTimeout(longPressTimer);
     longPressTimer = setTimeout(function() {
       longPressTimer = null;
@@ -866,9 +992,24 @@ $body
     }
   }, { passive: true });
 
-  document.addEventListener('touchend', function() {
+  document.addEventListener('touchend', function(e) {
     if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
     pressStart = null;
+    // Swipe check.
+    if (!swipeStart || draggingHandle) { swipeStart = null; return; }
+    if (selStart !== null && activeSpans.length > 0) { swipeStart = null; return; }
+    if (e.changedTouches.length !== 1) { swipeStart = null; return; }
+    var t = e.changedTouches[0];
+    var dx = t.clientX - swipeStart.x;
+    var dy = t.clientY - swipeStart.y;
+    var dt = Date.now() - swipeStart.time;
+    swipeStart = null;
+    if (dt > SWIPE_MAX_DURATION_MS) return;
+    if (Math.abs(dx) < SWIPE_MIN_X) return;
+    if (Math.abs(dy) > Math.abs(dx) * SWIPE_VERTICAL_RATIO) return;
+    // Real horizontal swipe: navigate, suppress the synthetic click.
+    Tap.postMessage(dx < 0 ? 'next' : 'prev');
+    suppressNextClick = true;
   }, { passive: true });
 
   document.addEventListener('click', function(e) {
@@ -937,7 +1078,7 @@ $body
   };
 
   window.addEventListener('load', function() {
-    if (typeof gotoPage === 'function') gotoPage($initialPage);
+    if (typeof gotoPage === 'function') gotoPage($initialPage, false);
     if (typeof reportPage === 'function') reportPage();
   });
 </script>
@@ -1110,7 +1251,7 @@ $body
     var ww = window.innerWidth;
     var page = Math.max(0, Math.floor((rect.left + sl) / ww));
     if (typeof gotoPage === 'function') {
-      gotoPage(page);
+      gotoPage(page, false);
       if (typeof reportPage === 'function') reportPage();
     }
   }
@@ -1220,20 +1361,22 @@ $body
   Future<void> _goPrev() async {
     if (!_ready) return;
     if (_pageInChapter > 0) {
-      await _web.runJavaScript('gotoPage(curPage() - 1); reportPage();');
+      await _web.runJavaScript('gotoPage(curPage() - 1);');
     } else if (_chapterIndex > 0) {
       _chapterIndex--;
       await _renderCurrentChapter(initialPage: 99999);
+      _publishControls();
     }
   }
 
   Future<void> _goNext() async {
     if (!_ready) return;
     if (_pageInChapter < _pagesInChapter - 1) {
-      await _web.runJavaScript('gotoPage(curPage() + 1); reportPage();');
+      await _web.runJavaScript('gotoPage(curPage() + 1);');
     } else if (_chapterIndex < _chapters.length - 1) {
       _chapterIndex++;
       await _renderCurrentChapter(initialPage: 0);
+      _publishControls();
     }
   }
 

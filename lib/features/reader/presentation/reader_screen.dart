@@ -187,6 +187,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 onPressed: () => context.pop(),
               ),
               actions: [
+                Builder(
+                  builder: (_) {
+                    final controls = ref.watch(readerControlsProvider);
+                    final hasChapters = controls.chapterTitles.isNotEmpty &&
+                        controls.jumpToChapter != null;
+                    if (!hasChapters) return const SizedBox.shrink();
+                    return IconButton(
+                      icon: const Icon(Icons.format_list_bulleted),
+                      tooltip: 'Chapters',
+                      onPressed: () => _showChapterPicker(controls),
+                    );
+                  },
+                ),
                 IconButton(
                   icon: const Icon(Icons.tune),
                   onPressed: _showSettingsSheet,
@@ -227,6 +240,120 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       showDragHandle: true,
       isScrollControlled: true,
       builder: (_) => const ReaderSettingsSheet(),
+    );
+  }
+
+  void _showChapterPicker(ReaderControls controls) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetCtx) => _ChapterPicker(
+        titles: controls.chapterTitles,
+        currentIndex: controls.currentChapterIndex ?? 0,
+        onPick: (index) {
+          Navigator.of(sheetCtx).pop();
+          controls.jumpToChapter?.call(index);
+        },
+      ),
+    );
+  }
+}
+
+class _ChapterPicker extends StatefulWidget {
+  const _ChapterPicker({
+    required this.titles,
+    required this.currentIndex,
+    required this.onPick,
+  });
+
+  final List<String> titles;
+  final int currentIndex;
+  final ValueChanged<int> onPick;
+
+  @override
+  State<_ChapterPicker> createState() => _ChapterPickerState();
+}
+
+class _ChapterPickerState extends State<_ChapterPicker> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Land near the current chapter so the user doesn't have to scroll.
+    final initial = (widget.currentIndex * 56.0 - 80).clamp(0.0, 1e6);
+    _scrollController = ScrollController(initialScrollOffset: initial);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.7;
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'Chapters',
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: ListView.builder(
+                controller: _scrollController,
+                itemCount: widget.titles.length,
+                itemBuilder: (_, i) {
+                  final isCurrent = i == widget.currentIndex;
+                  return ListTile(
+                    selected: isCurrent,
+                    leading: SizedBox(
+                      width: 28,
+                      child: Text(
+                        '${i + 1}',
+                        textAlign: TextAlign.right,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      widget.titles[i],
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight:
+                            isCurrent ? FontWeight.w700 : FontWeight.w400,
+                      ),
+                    ),
+                    trailing: isCurrent
+                        ? Icon(
+                            Icons.check,
+                            size: 20,
+                            color: theme.colorScheme.primary,
+                          )
+                        : null,
+                    onTap: () => widget.onPick(i),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
