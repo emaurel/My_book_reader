@@ -1,0 +1,100 @@
+name: Release iOS
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.7
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cocoapods
+            ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: Pod install
+        run: |
+          cd ios
+          pod install --repo-update
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package .ipa
+        run: |
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          IPA="book-reader-${{ github.ref_name }}.ipa"
+          zip -qq -r "$IPA" Payload
+          mv "$IPA" "$GITHUB_WORKSPACE/"
+
+      - name: Generate AltStore source manifest
+        run: |
+          IPA_FILE="book-reader-${{ github.ref_name }}.ipa"
+          IPA_SIZE=$(stat -f%z "$IPA_FILE")
+          VERSION="${{ github.ref_name }}"
+          VERSION_NO_V="${VERSION#v}"
+          BUILD=$(awk -F'+' '/^version:/ {print $2}' pubspec.yaml | tr -d '[:space:]')
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${IPA_FILE}"
+          ICON_URL="https://raw.githubusercontent.com/${{ github.repository }}/main/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png"
+          SOURCE_URL="https://github.com/${{ github.repository }}/releases/latest/download/altstore-source.json"
+          cat > altstore-source.json <<JSON
+          {
+            "name": "Book Reader",
+            "identifier": "com.maurel.bookReader.altstore",
+            "sourceURL": "${SOURCE_URL}",
+            "apps": [
+              {
+                "name": "Book Reader",
+                "bundleIdentifier": "com.maurel.bookReader",
+                "developerName": "Edgar Maurel",
+                "subtitle": "Clean reader for EPUB/PDF/Kindle with annotations",
+                "localizedDescription": "EPUB/PDF/Kindle reader with citations, characters, dictionaries, notes, and cross-book links. Bundle and share entire reading kits.",
+                "iconURL": "${ICON_URL}",
+                "tintColor": "6750A4",
+                "category": "books",
+                "screenshotURLs": [],
+                "versions": [
+                  {
+                    "version": "${VERSION_NO_V}",
+                    "buildVersion": "${BUILD}",
+                    "date": "${DATE}",
+                    "downloadURL": "${DOWNLOAD_URL}",
+                    "size": ${IPA_SIZE},
+                    "minOSVersion": "12.0"
+                  }
+                ]
+              }
+            ]
+          }
+          JSON
+          cat altstore-source.json
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            book-reader-${{ github.ref_name }}.ipa
+            altstore-source.json
