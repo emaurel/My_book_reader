@@ -25,7 +25,7 @@ class ScanPermissionDeniedException implements Exception {
   @override
   String toString() =>
       'Permission to read device storage was not granted. '
-      'Enable "All files access" for Book Reader in Android settings.';
+      'Enable "All files access" for Lorekeeper in Android settings.';
 }
 
 class BookScanner {

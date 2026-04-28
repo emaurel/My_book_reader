@@ -66,7 +66,7 @@ class SettingsScreen extends ConsumerWidget {
           FutureBuilder<PackageInfo>(
             future: PackageInfo.fromPlatform(),
             builder: (_, snap) => ListTile(
-              title: const Text('Book Reader'),
+              title: const Text('Lorekeeper'),
               subtitle: Text(
                 snap.hasData
                     ? 'Version ${snap.data!.version} '

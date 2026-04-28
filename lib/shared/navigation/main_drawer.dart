@@ -100,7 +100,7 @@ class MainDrawer extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
               child: Text(
-                'Book Reader',
+                'Lorekeeper',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),

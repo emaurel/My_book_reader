@@ -61,8 +61,8 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       );
       await Share.shareXFiles(
         [XFile(path)],
-        subject: 'Book Reader backup',
-        text: 'Book Reader backup',
+        subject: 'Lorekeeper backup',
+        text: 'Lorekeeper backup',
       );
     } catch (e) {
       if (!mounted) return;

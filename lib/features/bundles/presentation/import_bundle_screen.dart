@@ -114,7 +114,7 @@ class _ImportBundleScreenState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Pick a .zip bundle exported from another Book Reader '
+                'Pick a .zip bundle exported from another Lorekeeper '
                 'install. Existing books with the same title, author, '
                 'and size are merged in place; otherwise a copy is '
                 'added to your library.',

@@ -277,7 +277,7 @@ class BookBundleService {
     final archive = ZipDecoder().decodeBytes(bytes);
     final manifestEntry = archive.findFile('manifest.json');
     if (manifestEntry == null) {
-      throw const FormatException('Not a Book Reader bundle');
+      throw const FormatException('Not a Lorekeeper bundle');
     }
     final manifest = jsonDecode(
       utf8.decode(manifestEntry.content as List<int>),
@@ -706,7 +706,7 @@ class BookBundleService {
     final archive = ZipDecoder().decodeBytes(bytes);
     final manifestEntry = archive.findFile('manifest.json');
     if (manifestEntry == null) {
-      throw const FormatException('Not a Book Reader bundle');
+      throw const FormatException('Not a Lorekeeper bundle');
     }
     return jsonDecode(utf8.decode(manifestEntry.content as List<int>))
         as Map<String, dynamic>;

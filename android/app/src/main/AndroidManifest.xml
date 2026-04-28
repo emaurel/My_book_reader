@@ -17,7 +17,7 @@
         tools:ignore="ScopedStorage" />
 
     <application
-        android:label="Book Reader"
+        android:label="Lorekeeper"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true">

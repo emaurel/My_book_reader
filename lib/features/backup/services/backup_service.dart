@@ -139,7 +139,7 @@ class BackupService {
     final manifestEntry = archive.findFile('manifest.json');
     if (manifestEntry == null) {
       throw const FormatException(
-        'Not a Book Reader backup (manifest.json missing)',
+        'Not a Lorekeeper backup (manifest.json missing)',
       );
     }
     final manifest =
