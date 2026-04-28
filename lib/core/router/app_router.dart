@@ -11,6 +11,7 @@ import '../../features/bundles/presentation/import_bundle_screen.dart';
 import '../../features/dictionary/presentation/dictionaries_screen.dart';
 import '../../features/downloads/presentation/download_books_screen.dart';
 import '../../features/notes/presentation/notes_screen.dart';
+import '../../features/stats/presentation/stats_screen.dart';
 import '../../features/settings/presentation/selection_menu_settings_screen.dart';
 import '../../features/library/presentation/current_readings_screen.dart';
 import '../../features/library/presentation/library_screen.dart';
@@ -65,6 +66,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/notes',
         name: 'notes',
         builder: (_, __) => const NotesScreen(),
+      ),
+      GoRoute(
+        path: '/stats',
+        name: 'stats',
+        builder: (_, __) => const StatsScreen(),
       ),
       if (!kStoreBuild)
         GoRoute(

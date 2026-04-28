@@ -18,6 +18,7 @@ import '../../book_links/providers/book_link_provider.dart';
 import '../../citations/providers/citation_provider.dart';
 import '../../notes/presentation/widgets/add_note_sheet.dart';
 import '../../notes/providers/note_provider.dart';
+import '../../stats/providers/stats_provider.dart';
 import '../../dictionary/presentation/widgets/definition_sheet.dart';
 import '../../dictionary/providers/dictionary_provider.dart';
 import '../../library/domain/book.dart';
@@ -64,6 +65,21 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
   int _chapterIndex = 0;
   int _pageInChapter = 0;
   int _pagesInChapter = 1;
+
+  /// Last (chapter, page) we logged a forward turn for. Used to skip
+  /// re-renders / backward turns so the stats counter stays accurate.
+  (int, int)? _lastLoggedPosition;
+
+  /// Wall-clock of the last logged turn. Anything within
+  /// [_minTurnInterval] of this is treated as skim / tap-spam and
+  /// dropped from the stats.
+  DateTime? _lastLoggedAt;
+  static const _minTurnInterval = Duration(seconds: 10);
+
+  /// Total words in the currently-rendered chapter (recomputed every
+  /// chapter change). Divided by [_pagesInChapter] to estimate words
+  /// per logged page turn.
+  int _chapterWordCount = 0;
   bool _wakeEnabled = false;
   bool _ready = false;
   String? _error;
@@ -220,9 +236,22 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
     final settings = ref.read(readerSettingsProvider);
     _appliedSettings = settings;
     final chapter = _chapters[_chapterIndex];
-    final html = _buildHtml(chapter.HtmlContent ?? '', settings, initialPage);
+    final rawHtml = chapter.HtmlContent ?? '';
+    _chapterWordCount = _countWords(rawHtml);
+    final html = _buildHtml(rawHtml, settings, initialPage);
     setState(() => _ready = false);
     await _web.loadHtmlString(html);
+  }
+
+  /// Cheap word count: strip HTML tags, split on whitespace, drop
+  /// empties. Approximate but fast — accuracy is bounded anyway by
+  /// the per-chapter average we hand to each logged page turn.
+  int _countWords(String html) {
+    final stripped = html.replaceAll(RegExp(r'<[^>]+>'), ' ');
+    return stripped
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .length;
   }
 
   String _buildHtml(String chapterHtml, ReaderSettings s, int initialPage) {
@@ -1382,8 +1411,42 @@ $body
       final data = jsonDecode(msg.message) as Map<String, dynamic>;
       _pageInChapter = (data['page'] as num).toInt();
       _pagesInChapter = (data['total'] as num).toInt();
+      _maybeLogPageTurn();
       _saveProgress();
     } catch (_) {}
+  }
+
+  /// Logs a forward page turn for the stats screen. Drops:
+  ///   * backward jumps and DOM-rerender re-fires (same position)
+  ///   * citation-preview reads (don't pollute stats)
+  ///   * burst turns under [_minTurnInterval] — tap-spam, skim-mode,
+  ///     animation flicker
+  void _maybeLogPageTurn() {
+    final now = (_chapterIndex, _pageInChapter);
+    final last = _lastLoggedPosition;
+    if (last == null) {
+      _lastLoggedPosition = now;
+      _lastLoggedAt = DateTime.now();
+      return;
+    }
+    final isForward = now.$1 > last.$1 ||
+        (now.$1 == last.$1 && now.$2 > last.$2);
+    _lastLoggedPosition = now;
+    if (!isForward) return;
+    if (widget.previewCitationId != null) return;
+    final nowTime = DateTime.now();
+    if (_lastLoggedAt != null &&
+        nowTime.difference(_lastLoggedAt!) < _minTurnInterval) {
+      return;
+    }
+    _lastLoggedAt = nowTime;
+    final wordsThisPage = (_pagesInChapter > 0 && _chapterWordCount > 0)
+        ? (_chapterWordCount / _pagesInChapter).round()
+        : null;
+    ref.read(pageTurnRepositoryProvider).log(
+          bookId: widget.book.id,
+          words: wordsThisPage,
+        );
   }
 
   void _onJsSelection(JavaScriptMessage msg) {

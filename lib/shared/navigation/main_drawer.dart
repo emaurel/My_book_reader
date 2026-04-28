@@ -55,6 +55,11 @@ const List<DrawerEntry> mainDrawerEntries = [
     label: 'Notes',
     routePath: '/notes',
   ),
+  DrawerEntry(
+    icon: Icons.bar_chart_outlined,
+    label: 'Statistics',
+    routePath: '/stats',
+  ),
   if (!kStoreBuild)
     DrawerEntry(
       icon: Icons.cloud_download_outlined,
