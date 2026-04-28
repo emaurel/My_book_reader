@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../build_flags.dart';
+
 import '../../features/characters/presentation/characters_screen.dart';
 import '../../features/citations/presentation/citations_screen.dart';
 import '../../features/backup/presentation/backup_screen.dart';
@@ -64,11 +66,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'notes',
         builder: (_, __) => const NotesScreen(),
       ),
-      GoRoute(
-        path: '/downloads',
-        name: 'downloads',
-        builder: (_, __) => const DownloadBooksScreen(),
-      ),
+      if (!kStoreBuild)
+        GoRoute(
+          path: '/downloads',
+          name: 'downloads',
+          builder: (_, __) => const DownloadBooksScreen(),
+        ),
       GoRoute(
         path: '/backup',
         name: 'backup',

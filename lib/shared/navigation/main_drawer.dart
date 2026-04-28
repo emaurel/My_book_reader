@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/build_flags.dart';
+
 /// One entry in the app's left drawer. Add new sections by appending to
 /// [mainDrawerEntries] below — no code in this file needs to change.
 class DrawerEntry {
@@ -53,11 +55,12 @@ const List<DrawerEntry> mainDrawerEntries = [
     label: 'Notes',
     routePath: '/notes',
   ),
-  DrawerEntry(
-    icon: Icons.cloud_download_outlined,
-    label: 'Download books',
-    routePath: '/downloads',
-  ),
+  if (!kStoreBuild)
+    DrawerEntry(
+      icon: Icons.cloud_download_outlined,
+      label: 'Download books',
+      routePath: '/downloads',
+    ),
   DrawerEntry(
     icon: Icons.backup_outlined,
     label: 'Backup & restore',
