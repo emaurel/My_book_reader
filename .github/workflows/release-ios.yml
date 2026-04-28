@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build (e.g. v0.3.0)'
+        required: true
+        default: 'v0.3.0'
 
 permissions:
   contents: write
@@ -11,8 +17,12 @@ permissions:
 jobs:
   build-ipa:
     runs-on: macos-latest
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
 
       - uses: subosito/flutter-action@v2
         with:
@@ -45,15 +55,15 @@ jobs:
           cd build/ios/iphoneos
           mkdir -p Payload
           cp -r Runner.app Payload/
-          IPA="book-reader-${{ github.ref_name }}.ipa"
+          IPA="book-reader-${{ env.RELEASE_TAG }}.ipa"
           zip -qq -r "$IPA" Payload
           mv "$IPA" "$GITHUB_WORKSPACE/"
 
       - name: Generate AltStore source manifest
         run: |
-          IPA_FILE="book-reader-${{ github.ref_name }}.ipa"
+          IPA_FILE="book-reader-${{ env.RELEASE_TAG }}.ipa"
           IPA_SIZE=$(stat -f%z "$IPA_FILE")
-          VERSION="${{ github.ref_name }}"
+          VERSION="${{ env.RELEASE_TAG }}"
           VERSION_NO_V="${VERSION#v}"
           BUILD=$(awk -F'+' '/^version:/ {print $2}' pubspec.yaml | tr -d '[:space:]')
           DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -96,5 +106,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            book-reader-${{ github.ref_name }}.ipa
+            book-reader-${{ env.RELEASE_TAG }}.ipa
             altstore-source.json
