@@ -45,3 +45,35 @@ class ReadingStats {
 }
 
 enum StatsRange { day, week, month }
+
+class AllTimeStats {
+  const AllTimeStats({
+    required this.totalPages,
+    required this.totalWords,
+    required this.booksFinished,
+    required this.firstActivityAt,
+  });
+
+  final int totalPages;
+  final int totalWords;
+  final int booksFinished;
+
+  /// Timestamp of the earliest logged page turn — null when the user
+  /// has never read anything. Used to bound how far back the month
+  /// pager goes in the All-time tab.
+  final DateTime? firstActivityAt;
+}
+
+/// Identifies one calendar-month chart in the all-time view.
+class StatsMonth {
+  const StatsMonth(this.year, this.month);
+  final int year;
+  final int month;
+
+  @override
+  bool operator ==(Object other) =>
+      other is StatsMonth && other.year == year && other.month == month;
+
+  @override
+  int get hashCode => Object.hash(year, month);
+}

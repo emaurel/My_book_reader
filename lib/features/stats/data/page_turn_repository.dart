@@ -43,4 +43,30 @@ class PageTurnRepository {
             ))
         .toList();
   }
+
+  /// Cumulative pages and words across every logged turn ever.
+  Future<({int pages, int words})> allTimeTotals() async {
+    final db = await _db;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS pages, COALESCE(SUM(words), 0) AS words '
+      'FROM page_turns',
+    );
+    final r = rows.first;
+    return (
+      pages: (r['pages'] as int?) ?? 0,
+      words: (r['words'] as int?) ?? 0,
+    );
+  }
+
+  /// Earliest logged turn, or null if there's never been one. Used
+  /// by the all-time view to bound how far back month-paging goes.
+  Future<DateTime?> earliestTurn() async {
+    final db = await _db;
+    final rows = await db.rawQuery(
+      'SELECT MIN(at) AS at FROM page_turns',
+    );
+    final at = rows.first['at'];
+    if (at is! int) return null;
+    return DateTime.fromMillisecondsSinceEpoch(at);
+  }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../library/providers/library_provider.dart';
 import '../data/page_turn_repository.dart';
 import '../domain/stats.dart';
 
@@ -106,6 +107,53 @@ final readingStatsProvider = FutureProvider.autoDispose
       return (start.millisecondsSinceEpoch, buckets);
   }
 }
+
+final allTimeStatsProvider =
+    FutureProvider.autoDispose<AllTimeStats>((ref) async {
+  final turns = ref.watch(pageTurnRepositoryProvider);
+  final books = ref.watch(bookRepositoryProvider);
+  final totals = await turns.allTimeTotals();
+  final finished = await books.finishedCount();
+  final first = await turns.earliestTurn();
+  return AllTimeStats(
+    totalPages: totals.pages,
+    totalWords: totals.words,
+    booksFinished: finished,
+    firstActivityAt: first,
+  );
+});
+
+/// Daily buckets for the requested calendar month. One page in the
+/// All-time tab's PageView per month.
+final monthlyChartProvider = FutureProvider.autoDispose
+    .family<List<ReadingBucket>, StatsMonth>((ref, month) async {
+  final repo = ref.watch(pageTurnRepositoryProvider);
+  final start = DateTime(month.year, month.month, 1);
+  final end = DateTime(month.year, month.month + 1, 1);
+  final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+  final buckets = List<ReadingBucket>.generate(daysInMonth, (i) {
+    final dayNum = i + 1;
+    return ReadingBucket(
+      label: dayNum % 5 == 1 ? dayNum.toString() : '',
+      pages: 0,
+    );
+  });
+  final samples = await repo.samplesBetween(
+    fromMs: start.millisecondsSinceEpoch,
+    toMs: end.millisecondsSinceEpoch,
+  );
+  for (final s in samples) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(s.at);
+    final i = dt.day - 1;
+    if (i >= 0 && i < buckets.length) {
+      buckets[i] = ReadingBucket(
+        label: buckets[i].label,
+        pages: buckets[i].pages + 1,
+      );
+    }
+  }
+  return buckets;
+});
 
 int _bucketIndexFor(StatsRange range, DateTime t, DateTime now) {
   switch (range) {

@@ -1745,8 +1745,13 @@ $body
   void _saveProgress() {
     if (_chapters.isEmpty) return;
     final perChapter = 1.0 / _chapters.length;
+    // (pageInChapter + 1) so the last page of the last chapter lands
+    // at exactly 1.0 — without the +1, the cap is 1 - 1/(C×P), which
+    // for a 100-page book hits 0.99 and falsely reads as "finished".
     final overall = ((_chapterIndex * perChapter) +
-            perChapter * (_pageInChapter / _pagesInChapter.clamp(1, 99999)))
+            perChapter *
+                ((_pageInChapter + 1) /
+                    _pagesInChapter.clamp(1, 99999)))
         .clamp(0.0, 1.0);
 
     ref.read(readerProgressProvider.notifier).state = ReaderProgress(

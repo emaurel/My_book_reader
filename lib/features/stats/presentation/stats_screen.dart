@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../domain/stats.dart';
 import '../providers/stats_provider.dart';
+import 'all_time_view.dart';
 
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
@@ -12,16 +13,18 @@ class StatsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         drawer: const MainDrawer(currentRoute: '/stats'),
         appBar: AppBar(
           title: const Text('Statistics'),
           bottom: const TabBar(
+            isScrollable: true,
             tabs: [
               Tab(text: 'Day'),
               Tab(text: 'Week'),
               Tab(text: 'Month'),
+              Tab(text: 'All time'),
             ],
           ),
         ),
@@ -30,6 +33,7 @@ class StatsScreen extends ConsumerWidget {
             _StatsTab(range: StatsRange.day),
             _StatsTab(range: StatsRange.week),
             _StatsTab(range: StatsRange.month),
+            AllTimeView(),
           ],
         ),
       ),

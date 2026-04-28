@@ -94,6 +94,29 @@ class BookRepository {
     await db.delete('books', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Books considered finished — progress at the very end. The reader
+  /// formula is normalised so the last page of the last chapter lands
+  /// at exactly 1.0; a tiny tolerance covers IEEE-754 rounding, but
+  /// the threshold sits well above the old "near-end" trap of 0.99.
+  Future<int> finishedCount() async {
+    final db = await _db;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS n FROM books WHERE progress >= 0.9995',
+    );
+    return (rows.first['n'] as int?) ?? 0;
+  }
+
+  Future<List<Book>> getFinished() async {
+    final db = await _db;
+    final rows = await db.query(
+      'books',
+      where: 'progress >= ?',
+      whereArgs: [0.9995],
+      orderBy: 'last_opened_at DESC NULLS LAST, title COLLATE NOCASE ASC',
+    );
+    return rows.map(Book.fromMap).toList();
+  }
+
   Future<void> updateProgress(
     int id, {
     required double progress,
