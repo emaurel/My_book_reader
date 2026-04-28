@@ -251,16 +251,15 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
   body {
     /* Padding sets the left margin of page 1 and the right margin of the
        last page; column-gap (= 2 * padding) renders as the right margin of
-       page N + the left margin of page N+1. column-width is sized so that
-       column-width + column-gap == 100vw, keeping scroll-unit aligned to
-       window.innerWidth and preventing per-page drift. */
+       page N + the left margin of page N+1. column-width and column-gap
+       are set in JS from documentElement.clientWidth so the CSS layout
+       matches the JS scroll math exactly — this avoids per-page drift on
+       iOS WebKit, where 100vw and clientWidth can differ by a few px. */
     visibility: hidden; /* revealed by JS once initial page is positioned */
     padding: 56px ${padding}px 24px;
     font-family: '${s.fontFamily}', Georgia, serif;
     font-size: ${s.fontSize}px;
     line-height: ${s.lineHeight};
-    column-width: calc(100vw - ${gap}px);
-    column-gap: ${gap}px;
     column-fill: auto;
     /* Disable native selection so Android's ActionMode (Copy/Share)
        never appears; we implement our own single-word selection in JS. */
@@ -346,9 +345,20 @@ class _EpubReaderViewState extends ConsumerState<EpubReaderView> {
 <body>
 $body
 <script>
-  function w() { return window.innerWidth; }
+  // documentElement.clientWidth is the most reliable viewport measure
+  // across iOS WebKit and Android Chromium — innerWidth disagrees on
+  // iOS when safe-area insets are in play.
+  function w() { return document.documentElement.clientWidth; }
+  function setupColumns() {
+    var ww = w();
+    document.body.style.columnWidth = (ww - $gap) + 'px';
+    document.body.style.columnGap = '${gap}px';
+  }
   function totalPages() {
-    return Math.max(1, Math.ceil(document.body.scrollWidth / w()));
+    var ww = w();
+    // Subtract 1px to absorb subpixel overshoot — without it, a body
+    // whose scrollWidth is e.g. 5*ww + 0.3 reports 6 pages instead of 5.
+    return Math.max(1, Math.ceil((document.body.scrollWidth - 1) / ww));
   }
   function curPage() {
     var s = document.scrollingElement || document.documentElement;
@@ -1231,7 +1241,13 @@ $body
   };
 
   window.addEventListener('load', function() {
+    if (typeof setupColumns === 'function') setupColumns();
     if (typeof gotoPage === 'function') gotoPage($initialPage, false);
+    if (typeof reportPage === 'function') reportPage();
+  });
+  // Re-pin column-width if the WebView is resized (rotation, keyboard).
+  window.addEventListener('resize', function() {
+    if (typeof setupColumns === 'function') setupColumns();
     if (typeof reportPage === 'function') reportPage();
   });
 </script>
