@@ -3,12 +3,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Read access to user-selected files (Android 13+) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-
-    <!-- Legacy storage (Android 12 and below) -->
+    <!-- Legacy storage for Android 12 and below; book files are picked
+         via SAF on Android 13+ which needs no READ_MEDIA_* permission.
+         The PROCESS_TEXT permissions used to live above this comment but
+         were removed — Lorekeeper does not read photos, videos, or
+         audio so READ_MEDIA_IMAGES / _VIDEO / _AUDIO have no purpose. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
