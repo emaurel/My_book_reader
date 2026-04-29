@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'book_reader.db';
-  static const _dbVersion = 15;
+  static const _dbVersion = 16;
 
   /// Exposed for the backup service so it can reject backups taken on
   /// future app versions whose DB schema we don't yet understand.
@@ -185,9 +185,12 @@ class DatabaseHelper {
         character_id INTEGER NOT NULL,
         text TEXT NOT NULL,
         book_id INTEGER,
+        spoiler_book_id INTEGER,
+        spoiler_chapter_index INTEGER,
         created_at INTEGER NOT NULL,
         FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
-        FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL
+        FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL,
+        FOREIGN KEY (spoiler_book_id) REFERENCES books(id) ON DELETE SET NULL
       )
     ''');
     await db.execute(
@@ -367,6 +370,14 @@ class DatabaseHelper {
     }
     if (oldVersion < 15) {
       await tryExec('ALTER TABLE page_turns ADD COLUMN words INTEGER');
+    }
+    if (oldVersion < 16) {
+      await tryExec(
+        'ALTER TABLE character_descriptions ADD COLUMN spoiler_book_id INTEGER',
+      );
+      await tryExec(
+        'ALTER TABLE character_descriptions ADD COLUMN spoiler_chapter_index INTEGER',
+      );
     }
   }
 }

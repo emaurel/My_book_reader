@@ -1722,6 +1722,8 @@ $body
       name: name,
       characterId: characterId,
       bookSeries: widget.book.series,
+      currentBookId: widget.book.id,
+      currentChapterIndex: _chapterIndex,
     );
     if (!mounted) return;
     await _applyCharacterHighlightsForCurrentChapter();

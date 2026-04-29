@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../../core/locale/locale_provider.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../../library/providers/library_provider.dart';
 
@@ -14,55 +16,85 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(themeModeProvider);
     final showDocs = ref.watch(showDocumentsProvider);
+    final locale = ref.watch(localeProvider);
+    final l = AppLocalizations.of(context);
 
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/settings'),
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(l.navSettings)),
       body: ListView(
         children: [
-          const _SectionHeader('Library'),
+          _SectionHeader(l.settingsLibrary),
           SwitchListTile(
-            title: const Text('Show documents'),
-            subtitle: const Text('Include PDFs and TXT files alongside books'),
+            title: Text(l.settingsShowDocuments),
+            subtitle: Text(l.settingsShowDocumentsSubtitle),
             value: showDocs,
             onChanged: (v) =>
                 ref.read(showDocumentsProvider.notifier).set(v),
           ),
           const Divider(),
-          const _SectionHeader('Reader'),
+          _SectionHeader(l.settingsReader),
           ListTile(
-            title: const Text('Selection menu'),
-            subtitle: const Text(
-              'Reorder actions and choose which appear in "…"',
-            ),
+            title: Text(l.settingsSelectionMenu),
+            subtitle: Text(l.settingsSelectionMenuSubtitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/settings/selection-menu'),
           ),
           const Divider(),
-          const _SectionHeader('Appearance'),
+          _SectionHeader(l.settingsLanguage),
+          RadioListTile<Locale?>(
+            title: Text(l.settingsLanguageSystem),
+            value: null,
+            groupValue: locale,
+            onChanged: (v) =>
+                ref.read(localeProvider.notifier).set(v),
+          ),
+          RadioListTile<Locale?>(
+            title: Text(l.languageEnglish),
+            value: const Locale('en'),
+            groupValue: locale,
+            onChanged: (v) =>
+                ref.read(localeProvider.notifier).set(v),
+          ),
+          RadioListTile<Locale?>(
+            title: Text(l.languageFrench),
+            value: const Locale('fr'),
+            groupValue: locale,
+            onChanged: (v) =>
+                ref.read(localeProvider.notifier).set(v),
+          ),
+          RadioListTile<Locale?>(
+            title: Text(l.languageSwedish),
+            value: const Locale('sv'),
+            groupValue: locale,
+            onChanged: (v) =>
+                ref.read(localeProvider.notifier).set(v),
+          ),
+          const Divider(),
+          _SectionHeader(l.settingsAppearance),
           RadioListTile<ThemeMode>(
-            title: const Text('Follow system'),
+            title: Text(l.settingsAppearanceFollowSystem),
             value: ThemeMode.system,
             groupValue: mode,
             onChanged: (v) =>
                 v != null ? ref.read(themeModeProvider.notifier).set(v) : null,
           ),
           RadioListTile<ThemeMode>(
-            title: const Text('Light'),
+            title: Text(l.settingsAppearanceLight),
             value: ThemeMode.light,
             groupValue: mode,
             onChanged: (v) =>
                 v != null ? ref.read(themeModeProvider.notifier).set(v) : null,
           ),
           RadioListTile<ThemeMode>(
-            title: const Text('Dark'),
+            title: Text(l.settingsAppearanceDark),
             value: ThemeMode.dark,
             groupValue: mode,
             onChanged: (v) =>
                 v != null ? ref.read(themeModeProvider.notifier).set(v) : null,
           ),
           const Divider(),
-          const _SectionHeader('About'),
+          _SectionHeader(l.settingsAbout),
           FutureBuilder<PackageInfo>(
             future: PackageInfo.fromPlatform(),
             builder: (_, snap) => ListTile(
@@ -75,9 +107,9 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
-          const ListTile(
-            title: Text('Supported formats'),
-            subtitle: Text('EPUB, PDF, TXT, AZW, AZW3, MOBI'),
+          ListTile(
+            title: Text(l.settingsSupportedFormats),
+            subtitle: const Text('EPUB, PDF, TXT, AZW, AZW3, MOBI'),
           ),
         ],
       ),

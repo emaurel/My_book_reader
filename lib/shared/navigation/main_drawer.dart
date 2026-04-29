@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/build_flags.dart';
+import '../../l10n/app_localizations.dart';
 
 /// One entry in the app's left drawer. Add new sections by appending to
 /// [mainDrawerEntries] below — no code in this file needs to change.
@@ -13,77 +14,77 @@ class DrawerEntry {
   });
 
   final IconData icon;
-  final String label;
+  final String Function(AppLocalizations) label;
   final String routePath;
 }
 
 /// Single source of truth for the drawer contents. Add a new item here
 /// and create the matching `GoRoute` in `app_router.dart`.
-const List<DrawerEntry> mainDrawerEntries = [
+final List<DrawerEntry> mainDrawerEntries = [
   DrawerEntry(
     icon: Icons.auto_stories_outlined,
-    label: 'Continue reading',
+    label: (l) => l.navContinueReading,
     routePath: '/current',
   ),
   DrawerEntry(
     icon: Icons.menu_book_outlined,
-    label: 'Library',
+    label: (l) => l.navLibrary,
     routePath: '/',
   ),
   DrawerEntry(
     icon: Icons.format_quote_outlined,
-    label: 'Citations',
+    label: (l) => l.navCitations,
     routePath: '/citations',
   ),
   DrawerEntry(
     icon: Icons.menu_book_outlined,
-    label: 'Dictionaries',
+    label: (l) => l.navDictionaries,
     routePath: '/dictionaries',
   ),
   DrawerEntry(
     icon: Icons.person_outline,
-    label: 'Characters',
+    label: (l) => l.navCharacters,
     routePath: '/characters',
   ),
   DrawerEntry(
     icon: Icons.link,
-    label: 'Links',
+    label: (l) => l.navLinks,
     routePath: '/links',
   ),
   DrawerEntry(
     icon: Icons.sticky_note_2_outlined,
-    label: 'Notes',
+    label: (l) => l.navNotes,
     routePath: '/notes',
   ),
   DrawerEntry(
     icon: Icons.bar_chart_outlined,
-    label: 'Statistics',
+    label: (l) => l.navStatistics,
     routePath: '/stats',
   ),
   if (!kStoreBuild)
     DrawerEntry(
       icon: Icons.cloud_download_outlined,
-      label: 'Download books',
+      label: (l) => l.navDownloadBooks,
       routePath: '/downloads',
     ),
   DrawerEntry(
     icon: Icons.backup_outlined,
-    label: 'Backup & restore',
+    label: (l) => l.navBackup,
     routePath: '/backup',
   ),
   DrawerEntry(
     icon: Icons.unarchive_outlined,
-    label: 'Import bundle',
+    label: (l) => l.navImportBundle,
     routePath: '/import-bundle',
   ),
 ];
 
 /// Footer entries pinned to the bottom of the drawer with a divider
 /// separating them from the main navigation. Currently just Settings.
-const List<DrawerEntry> drawerFooterEntries = [
+final List<DrawerEntry> drawerFooterEntries = [
   DrawerEntry(
     icon: Icons.settings_outlined,
-    label: 'Settings',
+    label: (l) => l.navSettings,
     routePath: '/settings',
   ),
 ];
@@ -153,7 +154,7 @@ class _DrawerTile extends StatelessWidget {
         color: selected ? scheme.primary : null,
       ),
       title: Text(
-        entry.label,
+        entry.label(AppLocalizations.of(context)),
         style: TextStyle(
           fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
           color: selected ? scheme.primary : null,

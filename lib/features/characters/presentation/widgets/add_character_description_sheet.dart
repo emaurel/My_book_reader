@@ -13,6 +13,7 @@ Future<bool?> showAddCharacterDescriptionSheet(
   BuildContext context, {
   required String text,
   int? bookId,
+  int? chapterIndex,
   String? bookSeries,
 }) {
   return showModalBottomSheet<bool>(
@@ -26,6 +27,7 @@ Future<bool?> showAddCharacterDescriptionSheet(
       child: _AddCharacterDescriptionSheet(
         text: text,
         bookId: bookId,
+        chapterIndex: chapterIndex,
         bookSeries: bookSeries,
       ),
     ),
@@ -36,10 +38,12 @@ class _AddCharacterDescriptionSheet extends ConsumerStatefulWidget {
   const _AddCharacterDescriptionSheet({
     required this.text,
     this.bookId,
+    this.chapterIndex,
     this.bookSeries,
   });
   final String text;
   final int? bookId;
+  final int? chapterIndex;
   final String? bookSeries;
 
   @override
@@ -102,10 +106,15 @@ class _AddCharacterDescriptionSheetState
       characterId = _selectedCharacterId!;
     }
 
+    // Default the spoiler-anchor to "where you authored it" so taps
+    // from a reader who hasn't reached this chapter get the redacted
+    // view. User can reset it afterwards from the description card.
     await repo.addDescription(
       characterId: characterId,
       text: widget.text,
       bookId: widget.bookId,
+      spoilerBookId: widget.bookId,
+      spoilerChapterIndex: widget.chapterIndex,
     );
     ref.read(characterRevisionProvider.notifier).state++;
 

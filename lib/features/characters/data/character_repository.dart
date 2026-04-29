@@ -100,16 +100,40 @@ class CharacterRepository {
     required int characterId,
     required String text,
     int? bookId,
+    int? spoilerBookId,
+    int? spoilerChapterIndex,
   }) async {
     final db = await _db;
     final id = await db.insert('character_descriptions', {
       'character_id': characterId,
       'text': text,
       'book_id': bookId,
+      'spoiler_book_id': spoilerBookId,
+      'spoiler_chapter_index': spoilerChapterIndex,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
     await _touchCharacter(characterId);
     return id;
+  }
+
+  /// Updates the spoiler-anchor pair on an existing description so the
+  /// user can re-tag a note ("actually this isn't a spoiler" / "this
+  /// references chapter X").
+  Future<void> updateDescriptionSpoiler({
+    required int id,
+    int? spoilerBookId,
+    int? spoilerChapterIndex,
+  }) async {
+    final db = await _db;
+    await db.update(
+      'character_descriptions',
+      {
+        'spoiler_book_id': spoilerBookId,
+        'spoiler_chapter_index': spoilerChapterIndex,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<void> updateDescription({

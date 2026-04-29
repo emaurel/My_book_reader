@@ -68,6 +68,7 @@ final _baselineActionsProvider = Provider<List<SelectionAction>>((ref) {
           context,
           text: ctx.text,
           bookId: ctx.bookId,
+          chapterIndex: ctx.chapterIndex,
           bookSeries: ctx.bookSeries,
         );
         return saved == true ? 'Saved character description' : null;
