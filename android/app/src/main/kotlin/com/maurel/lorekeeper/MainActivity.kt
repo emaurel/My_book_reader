@@ -1,4 +1,4 @@
-package com.example.book_reader
+package com.maurel.lorekeeper
 
 import io.flutter.embedding.android.FlutterActivity
 
