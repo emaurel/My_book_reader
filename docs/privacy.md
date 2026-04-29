@@ -80,4 +80,4 @@ canonical version of this policy lives in the project repository at
 
 For questions about this privacy policy, contact:
 
-**edgar.maurel@tercen.com**
+**edgar.maurel@gmail.com**
