@@ -182,6 +182,15 @@ class BackupService {
       extractedFiles++;
     }
 
+    onProgress?.call('Rewriting paths');
+    // Backups taken under a different applicationId (e.g. the rebrand
+    // from com.example.book_reader → com.maurel.lorekeeper) carry
+    // absolute paths in the DB that point at the OLD app's data dir.
+    // Rewrite books.file_path / cover_path so they point under the
+    // current app's docs dir; the actual file content was already
+    // extracted there in the previous step.
+    await _rewriteBookPaths(base);
+
     onProgress?.call('Restoring preferences');
     final prefsEntry = archive.findFile('prefs.json');
     if (prefsEntry != null) {
@@ -213,6 +222,37 @@ class BackupService {
       filesRestored: extractedFiles,
       backupCreatedAt: manifest['createdAt']?.toString(),
     );
+  }
+
+  Future<void> _rewriteBookPaths(Directory appDocsBase) async {
+    final db = await DatabaseHelper.instance.database;
+    final libBase = p.join(appDocsBase.path, _libraryDirName);
+    final coverBase = p.join(appDocsBase.path, _coversDirName);
+    final rows = await db.query(
+      'books',
+      columns: ['id', 'file_path', 'cover_path'],
+    );
+    for (final row in rows) {
+      final id = row['id'] as int;
+      final updates = <String, Object?>{};
+      final oldFile = row['file_path'] as String?;
+      if (oldFile != null && oldFile.isNotEmpty) {
+        final newFile = p.join(libBase, p.basename(oldFile));
+        if (newFile != oldFile && await File(newFile).exists()) {
+          updates['file_path'] = newFile;
+        }
+      }
+      final oldCover = row['cover_path'] as String?;
+      if (oldCover != null && oldCover.isNotEmpty) {
+        final newCover = p.join(coverBase, p.basename(oldCover));
+        if (newCover != oldCover && await File(newCover).exists()) {
+          updates['cover_path'] = newCover;
+        }
+      }
+      if (updates.isNotEmpty) {
+        await db.update('books', updates, where: 'id = ?', whereArgs: [id]);
+      }
+    }
   }
 
   Future<void> _addDirectoryToArchive(
