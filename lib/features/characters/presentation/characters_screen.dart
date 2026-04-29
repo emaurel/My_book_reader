@@ -5,6 +5,7 @@ import '../../../shared/navigation/main_drawer.dart';
 import '../domain/affiliation.dart';
 import '../domain/character.dart';
 import '../providers/character_provider.dart';
+import 'character_timeline_screen.dart';
 import 'widgets/character_affiliations_editor.dart';
 import 'widgets/character_alias_editor.dart';
 import 'widgets/character_description_card.dart';
@@ -48,7 +49,7 @@ class CharactersScreen extends ConsumerWidget {
                     dividerColor: Colors.transparent,
                   ),
                   child: ExpansionTile(
-                    initiallyExpanded: true,
+                    initiallyExpanded: false,
                     tilePadding: const EdgeInsets.symmetric(horizontal: 4),
                     childrenPadding: EdgeInsets.zero,
                     title: Text(
@@ -133,7 +134,7 @@ class _SeriesAffiliations extends ConsumerWidget {
           return Theme(
             data: theme.copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
-              initiallyExpanded: true,
+              initiallyExpanded: false,
               tilePadding: const EdgeInsets.symmetric(horizontal: 12),
               childrenPadding: EdgeInsets.zero,
               title: Text(
@@ -161,7 +162,7 @@ class _SeriesAffiliations extends ConsumerWidget {
               Theme(
                 data: theme.copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
-                  initiallyExpanded: true,
+                  initiallyExpanded: false,
                   tilePadding: const EdgeInsets.symmetric(horizontal: 12),
                   childrenPadding: EdgeInsets.zero,
                   title: Text(
@@ -256,6 +257,19 @@ class _CharacterCard extends ConsumerWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              icon: const Icon(Icons.timeline),
+              tooltip: 'View timeline',
+              onPressed: character.id == null
+                  ? null
+                  : () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => CharacterTimelineScreen(
+                            character: character,
+                          ),
+                        ),
+                      ),
+            ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
               tooltip: 'Delete character',

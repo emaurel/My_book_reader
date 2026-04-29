@@ -6,7 +6,6 @@ import '../../../library/providers/library_provider.dart';
 import '../../domain/character.dart';
 import '../../domain/character_description.dart';
 import '../../providers/character_provider.dart';
-import '../character_timeline_screen.dart';
 import 'character_affiliations_editor.dart';
 import 'character_alias_editor.dart';
 import 'character_description_card.dart';
@@ -147,27 +146,7 @@ class _CharacterBodyState extends ConsumerState<_CharacterBody> {
         CharacterAliasEditor(character: widget.character),
         const SizedBox(height: 12),
         CharacterAffiliationsEditor(character: widget.character),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            icon: const Icon(Icons.timeline),
-            label: const Text('View timeline'),
-            onPressed: widget.character.id == null
-                ? null
-                : () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => CharacterTimelineScreen(
-                          character: widget.character,
-                        ),
-                      ),
-                    );
-                  },
-          ),
-        ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         descs.when(
           loading: () => const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),

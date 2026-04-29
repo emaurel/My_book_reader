@@ -49,6 +49,15 @@ class BackupService {
     }
 
     onProgress?.call('Adding books');
+    // Walk every book in the DB and embed its bytes into the archive
+    // under library/<basename>. This covers both books that live in
+    // the app's library/ directory AND books referenced from external
+    // paths (e.g. /storage/emulated/0/Download/) — without this, the
+    // restored DB rows pointed at paths the destination device can't
+    // read, and the reader threw "permission denied" on open.
+    await _addAllBookFilesToArchive(archive);
+    // Covers and any other library/ assets that aren't tracked as
+    // book files still go in via the directory walk.
     await _addDirectoryToArchive(
       archive,
       Directory(p.join(base.path, _libraryDirName)),
@@ -255,16 +264,51 @@ class BackupService {
     }
   }
 
+  Future<void> _addAllBookFilesToArchive(Archive archive) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      'books',
+      columns: ['file_path'],
+      where: 'file_path IS NOT NULL AND file_path != ?',
+      whereArgs: const [''],
+    );
+    final seen = <String>{};
+    for (final row in rows) {
+      final src = row['file_path'] as String?;
+      if (src == null || src.isEmpty) continue;
+      final basename = p.basename(src);
+      // Dedupe: the directory walk that runs after this call will
+      // re-add files in library/ — same archive name would create
+      // duplicate entries. Emit each basename once here.
+      if (!seen.add(basename)) continue;
+      final f = File(src);
+      try {
+        if (!await f.exists()) continue;
+        final bytes = await f.readAsBytes();
+        final archivePath = '$_libraryDirName/$basename';
+        archive.addFile(
+          ArchiveFile(archivePath, bytes.length, bytes),
+        );
+      } catch (_) {
+        // Permission denied / file gone — skip this book quietly,
+        // its DB row will be rewritten or marked as missing on
+        // restore, but the rest of the backup proceeds.
+      }
+    }
+  }
+
   Future<void> _addDirectoryToArchive(
     Archive archive,
     Directory dir,
     String prefix,
   ) async {
     if (!await dir.exists()) return;
+    final existing = archive.files.map((f) => f.name).toSet();
     await for (final entity in dir.list(recursive: false)) {
       if (entity is! File) continue;
-      final bytes = await entity.readAsBytes();
       final name = '$prefix/${p.basename(entity.path)}';
+      if (existing.contains(name)) continue;
+      final bytes = await entity.readAsBytes();
       archive.addFile(ArchiveFile(name, bytes.length, bytes));
     }
   }

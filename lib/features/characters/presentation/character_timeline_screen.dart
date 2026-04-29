@@ -20,8 +20,12 @@ class CharacterTimelineScreen extends ConsumerStatefulWidget {
 
 class _CharacterTimelineScreenState
     extends ConsumerState<CharacterTimelineScreen> {
-  Book? _selectedBook;
+  int? _selectedBookId;
   Future<List<TimelinePoint>>? _future;
+  // Cached so build() doesn't generate a fresh Future on every paint.
+  // Without this, FutureBuilder re-resolves with new Book instances
+  // and the DropdownButtonFormField loses its selection state.
+  late final Future<List<Book>> _booksFuture = _seriesBooks();
 
   Future<List<Book>> _seriesBooks() async {
     final repo = ref.read(bookRepositoryProvider);
@@ -47,7 +51,7 @@ class _CharacterTimelineScreenState
 
   void _runFor(Book book) {
     setState(() {
-      _selectedBook = book;
+      _selectedBookId = book.id;
       _future = CharacterTimelineService(
         ref.read(characterRepositoryProvider),
       ).compute(characterId: widget.character.id!, book: book);
@@ -62,7 +66,7 @@ class _CharacterTimelineScreenState
       ),
       body: SafeArea(
         child: FutureBuilder<List<Book>>(
-          future: _seriesBooks(),
+          future: _booksFuture,
           builder: (_, snap) {
             if (!snap.hasData) {
               return const Center(child: CircularProgressIndicator());
@@ -80,21 +84,25 @@ class _CharacterTimelineScreenState
               );
             }
             // Auto-pick the first book on first build.
-            if (_selectedBook == null) {
+            if (_selectedBookId == null) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted && _selectedBook == null) _runFor(books.first);
+                if (mounted && _selectedBookId == null) _runFor(books.first);
               });
             }
+            // Compare by id, not identity, so the dropdown holds
+            // its selection across rebuilds even if the underlying
+            // book list rebuilds with new instances.
+            final currentValue = _selectedBookId != null &&
+                    books.any((b) => b.id == _selectedBookId)
+                ? _selectedBookId
+                : null;
             return Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  DropdownButtonFormField<Book>(
-                    value: _selectedBook != null &&
-                            books.contains(_selectedBook)
-                        ? _selectedBook
-                        : null,
+                  DropdownButtonFormField<int>(
+                    initialValue: currentValue,
                     decoration: const InputDecoration(
                       labelText: 'Book',
                       border: OutlineInputBorder(),
@@ -102,7 +110,7 @@ class _CharacterTimelineScreenState
                     items: [
                       for (final b in books)
                         DropdownMenuItem(
-                          value: b,
+                          value: b.id,
                           child: Text(
                             b.title,
                             maxLines: 1,
@@ -110,8 +118,10 @@ class _CharacterTimelineScreenState
                           ),
                         ),
                     ],
-                    onChanged: (b) {
-                      if (b != null) _runFor(b);
+                    onChanged: (id) {
+                      if (id == null) return;
+                      final picked = books.firstWhere((b) => b.id == id);
+                      _runFor(picked);
                     },
                   ),
                   const SizedBox(height: 16),
