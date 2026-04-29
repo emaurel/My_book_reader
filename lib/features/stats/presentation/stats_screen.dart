@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../domain/stats.dart';
 import '../providers/stats_provider.dart';
@@ -12,19 +13,20 @@ class StatsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l = AppLocalizations.of(context);
     return DefaultTabController(
       length: 4,
       child: Scaffold(
         drawer: const MainDrawer(currentRoute: '/stats'),
         appBar: AppBar(
-          title: const Text('Statistics'),
-          bottom: const TabBar(
+          title: Text(l.navStatistics),
+          bottom: TabBar(
             isScrollable: true,
             tabs: [
-              Tab(text: 'Day'),
-              Tab(text: 'Week'),
-              Tab(text: 'Month'),
-              Tab(text: 'All time'),
+              Tab(text: l.statsTabDay),
+              Tab(text: l.statsTabWeek),
+              Tab(text: l.statsTabMonth),
+              Tab(text: l.statsTabAllTime),
             ],
           ),
         ),
@@ -77,17 +79,17 @@ class _StatsBody extends StatelessWidget {
             children: [
               Expanded(
                 child: _StatCard(
-                  label: 'Pages',
+                  label: AppLocalizations.of(context).statsCardPages,
                   value: stats.totalPages.toString(),
-                  caption: _captionFor(range),
+                  caption: _captionFor(context, range),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _StatCard(
-                  label: 'Words',
+                  label: AppLocalizations.of(context).statsCardWords,
                   value: _fmtCount(stats.totalWords),
-                  caption: _captionFor(range),
+                  caption: _captionFor(context, range),
                 ),
               ),
             ],
@@ -97,21 +99,21 @@ class _StatsBody extends StatelessWidget {
             children: [
               Expanded(
                 child: _StatCard(
-                  label: 'Pages / hour',
+                  label: AppLocalizations.of(context).statsCardPagesPerHour,
                   value: stats.pagesPerHour > 0
                       ? stats.pagesPerHour.toStringAsFixed(0)
                       : '—',
-                  caption: 'active reading',
+                  caption: AppLocalizations.of(context).statsCardActiveReading,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _StatCard(
-                  label: 'Words / hour',
+                  label: AppLocalizations.of(context).statsCardWordsPerHour,
                   value: stats.wordsPerHour > 0
                       ? _fmtCount(stats.wordsPerHour.round())
                       : '—',
-                  caption: 'active reading',
+                  caption: AppLocalizations.of(context).statsCardActiveReading,
                 ),
               ),
             ],
@@ -121,7 +123,8 @@ class _StatsBody extends StatelessWidget {
             child: stats.totalPages == 0
                 ? Center(
                     child: Text(
-                      'No reading recorded ${_captionFor(range)} yet.',
+                      AppLocalizations.of(context)
+                          .statsEmptyForRange(_captionFor(context, range)),
                       style: theme.textTheme.bodyMedium,
                     ),
                   )
@@ -136,14 +139,15 @@ class _StatsBody extends StatelessWidget {
     );
   }
 
-  String _captionFor(StatsRange r) {
+  String _captionFor(BuildContext context, StatsRange r) {
+    final l = AppLocalizations.of(context);
     switch (r) {
       case StatsRange.day:
-        return 'last 24h';
+        return l.statsCaptionLast24h;
       case StatsRange.week:
-        return 'last 7 days';
+        return l.statsCaptionLast7d;
       case StatsRange.month:
-        return 'last 30 days';
+        return l.statsCaptionLast30d;
     }
   }
 

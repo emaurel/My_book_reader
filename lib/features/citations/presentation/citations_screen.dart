@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../../library/providers/library_provider.dart';
 import '../domain/citation.dart';
@@ -16,7 +17,7 @@ class CitationsScreen extends ConsumerWidget {
     final citations = ref.watch(citationsProvider);
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/citations'),
-      appBar: AppBar(title: const Text('Citations')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).navCitations)),
       body: citations.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
@@ -99,19 +100,20 @@ class _CitationCard extends ConsumerWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.copy_all_outlined),
-              title: const Text('Copy text'),
+              title: Text(AppLocalizations.of(context).actionCopyText),
               onTap: () async {
+                final l = AppLocalizations.of(context);
                 Navigator.pop(sheetContext);
                 await Clipboard.setData(ClipboardData(text: citation.text));
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Copied to clipboard')),
+                  SnackBar(content: Text(l.citationsCopiedToClipboard)),
                 );
               },
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline),
-              title: const Text('Delete'),
+              title: Text(AppLocalizations.of(context).actionDelete),
               onTap: () async {
                 Navigator.pop(sheetContext);
                 if (citation.id != null) {
@@ -146,11 +148,13 @@ class _EmptyState extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 16),
-            Text('No citations yet', style: theme.textTheme.titleMedium),
+            Text(
+              AppLocalizations.of(context).citationsEmptyTitle,
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text(
-              'Long-press a passage in the reader and tap '
-              '"Citation" to save it here.',
+              AppLocalizations.of(context).citationsEmptyHint,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

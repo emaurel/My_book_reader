@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:graphview/GraphView.dart';
 
 import '../../../main.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../domain/book_link.dart';
@@ -167,12 +168,11 @@ class _LinksGraphViewState extends ConsumerState<LinksGraphView> {
       error: (e, _) => Center(child: Text('Error: $e')),
       data: (linkList) {
         if (linkList.isEmpty) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
               child: Text(
-                'No links yet — add some from the reader\'s '
-                'selection menu first.',
+                AppLocalizations.of(context).linksGraphEmpty,
                 textAlign: TextAlign.center,
               ),
             ),

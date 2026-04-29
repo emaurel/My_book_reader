@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../../library/providers/library_provider.dart';
 import '../services/book_bundle_service.dart';
@@ -71,16 +72,19 @@ class _ImportBundleScreenState
       // Refresh the library so the new books show up immediately.
       ref.invalidate(libraryProvider);
       if (!mounted) return;
+      final l = AppLocalizations.of(context);
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Imported ${summary.booksAdded} new book(s) '
-            '(${summary.booksMerged} matched existing). '
-            '${summary.citationsAdded} citations, '
-            '${summary.notesAdded} notes, '
-            '${summary.charactersAdded} characters, '
-            '${summary.dictionaryEntriesAdded} dict entries, '
-            '${summary.linksAdded} links.',
+            l.importBundleSummary(
+              summary.booksAdded,
+              summary.booksMerged,
+              summary.citationsAdded,
+              summary.notesAdded,
+              summary.charactersAdded,
+              summary.dictionaryEntriesAdded,
+              summary.linksAdded,
+            ),
           ),
           duration: const Duration(seconds: 8),
         ),
@@ -104,29 +108,24 @@ class _ImportBundleScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/import-bundle'),
-      appBar: AppBar(title: const Text('Import bundle')),
+      appBar: AppBar(title: Text(l.importBundleTitle)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Pick a .zip bundle exported from another Lorekeeper '
-                'install. Existing books with the same title, author, '
-                'and size are merged in place; otherwise a copy is '
-                'added to your library.',
-                style: theme.textTheme.bodyMedium,
-              ),
+              Text(l.importBundleIntro, style: theme.textTheme.bodyMedium),
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: _busy ? null : _pick,
                 icon: const Icon(Icons.folder_open),
-                label: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Pick bundle file'),
+                label: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(l.importBundlePick),
                 ),
               ),
               const SizedBox(height: 16),
@@ -192,8 +191,7 @@ class _Preview extends StatelessWidget {
             if (preview.includesProgress) ...[
               const SizedBox(height: 8),
               Text(
-                'Includes reading progress — your last-read positions '
-                'will be replaced for matching books.',
+                AppLocalizations.of(context).importBundleProgressIncluded,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.error,
                 ),
@@ -202,7 +200,7 @@ class _Preview extends StatelessWidget {
             if (preview.bookTitles.length > 1) ...[
               const SizedBox(height: 8),
               Text(
-                'Books in bundle:',
+                AppLocalizations.of(context).importBundleBooksHeader,
                 style: theme.textTheme.labelLarge,
               ),
               const SizedBox(height: 4),
@@ -217,7 +215,7 @@ class _Preview extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: FilledButton(
                 onPressed: onImport,
-                child: const Text('Import'),
+                child: Text(AppLocalizations.of(context).actionImport),
               ),
             ),
           ],

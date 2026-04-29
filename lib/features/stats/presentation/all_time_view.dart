@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../domain/stats.dart';
@@ -83,25 +84,26 @@ class _AllTimeBodyState extends State<_AllTimeBody> {
               children: [
                 Expanded(
                   child: _StatCard(
-                    label: 'Pages',
+                    label: AppLocalizations.of(context).statsCardPages,
                     value: _fmt(widget.stats.totalPages),
-                    caption: 'all time',
+                    caption: AppLocalizations.of(context).statsCaptionAllTime,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(
-                    label: 'Words',
+                    label: AppLocalizations.of(context).statsCardWords,
                     value: _fmt(widget.stats.totalWords),
-                    caption: 'all time',
+                    caption: AppLocalizations.of(context).statsCaptionAllTime,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(
-                    label: 'Books',
+                    label: AppLocalizations.of(context).statsCardBooks,
                     value: widget.stats.booksFinished.toString(),
-                    caption: 'finished',
+                    caption:
+                        AppLocalizations.of(context).statsCardBooksFinished,
                     onTap: widget.stats.booksFinished == 0
                         ? null
                         : () => _showFinishedBooks(context),
@@ -216,7 +218,7 @@ class _FinishedBooksSheet extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
                   child: Text(
-                    'Finished books',
+                    AppLocalizations.of(context).statsFinishedSheetTitle,
                     style: theme.textTheme.titleLarge,
                   ),
                 ),
@@ -291,11 +293,15 @@ class _FinishedBookTile extends ConsumerWidget {
                   Navigator.pop(context);
                 }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'open', child: Text('Open')),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'open',
+                  child: Text(AppLocalizations.of(context).actionOpen),
+                ),
                 PopupMenuItem(
                   value: 'unmark',
-                  child: Text('Mark as not finished'),
+                  child:
+                      Text(AppLocalizations.of(context).statsMarkAsNotFinished),
                 ),
               ],
             ),

@@ -3,6 +3,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../../library/providers/library_provider.dart';
 import '../services/book_download_service.dart';
@@ -151,7 +152,7 @@ class _DownloadBooksScreenState extends ConsumerState<DownloadBooksScreen> {
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/downloads'),
       appBar: AppBar(
-        title: const Text('Download books'),
+        title: Text(AppLocalizations.of(context).navDownloadBooks),
         actions: [
           IconButton(
             icon: const Icon(Icons.arrow_back_ios),

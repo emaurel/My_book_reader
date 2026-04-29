@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../../library/domain/book.dart';
 import '../../../library/providers/library_provider.dart';
 
@@ -46,6 +47,7 @@ class _LinkBookPickerSheetState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final library = ref.watch(libraryProvider);
+    final l = AppLocalizations.of(context);
     final viewInsets = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -57,7 +59,7 @@ class _LinkBookPickerSheetState
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
-                'Link to book',
+                l.linksPickerTitle,
                 style: theme.textTheme.titleLarge,
               ),
             ),
@@ -66,10 +68,10 @@ class _LinkBookPickerSheetState
               child: TextField(
                 controller: _searchCtrl,
                 autofocus: false,
-                decoration: const InputDecoration(
-                  hintText: 'Search by title or author',
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  hintText: l.linksPickerSearchHint,
+                  prefixIcon: const Icon(Icons.search),
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
                 onChanged: (v) =>
@@ -94,8 +96,8 @@ class _LinkBookPickerSheetState
                     return Center(
                       child: Text(
                         _query.isEmpty
-                            ? 'No other books in your library'
-                            : 'No matches',
+                            ? l.linksPickerNoOthers
+                            : l.linksPickerNoMatches,
                         style: theme.textTheme.bodyMedium,
                       ),
                     );

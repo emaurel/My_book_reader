@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../../library/domain/book.dart';
 import '../../services/book_bundle_service.dart';
 
@@ -36,7 +37,8 @@ Future<void> showShareSeriesBundleDialog(
     context,
     rootBookIds: ids,
     label: seriesName,
-    titleSuffix: ' (${ids.length} books)',
+    titleSuffix:
+        AppLocalizations.of(context).bundleSeriesSuffix(ids.length),
   );
 }
 
@@ -80,6 +82,7 @@ class _ShareBundleDialogState
   String? _stage;
 
   Future<void> _export() async {
+    final l = AppLocalizations.of(context);
     setState(() {
       _busy = true;
       _stage = null;
@@ -98,14 +101,14 @@ class _ShareBundleDialogState
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Bundle saved to ${result.savedPath}'),
+          content: Text(l.bundleSavedTo(result.savedPath)),
           duration: const Duration(seconds: 6),
         ),
       );
       await Share.shareXFiles(
         [XFile(result.savedPath)],
-        subject: 'Book bundle: ${widget.label}',
-        text: 'Book bundle: ${widget.label}',
+        subject: l.bundleSubject(widget.label),
+        text: l.bundleSubject(widget.label),
       );
     } catch (e) {
       if (!mounted) return;
@@ -114,7 +117,7 @@ class _ShareBundleDialogState
         _stage = null;
       });
       messenger.showSnackBar(
-        SnackBar(content: Text('Export failed: $e')),
+        SnackBar(content: Text(l.bundleExportFailed(e.toString()))),
       );
     }
   }
@@ -122,26 +125,23 @@ class _ShareBundleDialogState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Share book bundle'),
+      title: Text(l.bundleShareTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Bundles "${widget.label}"${widget.titleSuffix} together '
-            'with citations, notes, characters, dictionary entries, '
-            'and links into a single .zip you can share.',
+            l.bundleShareDescription(widget.label, widget.titleSuffix),
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
-            title: const Text('Include linked books'),
-            subtitle: const Text(
-              'Recursively pull in every book reachable through links',
-            ),
+            title: Text(l.bundleIncludeLinkedTitle),
+            subtitle: Text(l.bundleIncludeLinkedSubtitle),
             value: _includeLinked,
             onChanged: _busy
                 ? null
@@ -150,10 +150,8 @@ class _ShareBundleDialogState
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
-            title: const Text('Include reading progress'),
-            subtitle: const Text(
-              'Off by default — useful when sharing with friends',
-            ),
+            title: Text(l.bundleIncludeProgressTitle),
+            subtitle: Text(l.bundleIncludeProgressSubtitle),
             value: _includeProgress,
             onChanged: _busy
                 ? null
@@ -173,11 +171,11 @@ class _ShareBundleDialogState
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l.actionCancel),
         ),
         FilledButton(
           onPressed: _busy ? null : _export,
-          child: const Text('Export'),
+          child: Text(l.actionExport),
         ),
       ],
     );

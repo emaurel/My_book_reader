@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../reader/selection/selection_action.dart';
 import '../../reader/selection/selection_actions_provider.dart';
 
@@ -12,13 +13,14 @@ class SelectionMenuSettingsScreen extends ConsumerWidget {
     final actions = ref.watch(selectionActionsProvider);
     final notifier = ref.read(selectionMenuConfigProvider.notifier);
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Selection menu'),
+        title: Text(l.settingsSelectionMenu),
         actions: [
           IconButton(
-            tooltip: 'Reset to defaults',
+            tooltip: l.settingsSelectionMenuResetTooltip,
             icon: const Icon(Icons.restore),
             onPressed: notifier.reset,
           ),
@@ -29,8 +31,7 @@ class SelectionMenuSettingsScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: Text(
-              'Drag to reorder. Toggle "In overflow" to hide an action '
-              'behind the "…" menu instead of showing it inline.',
+              l.settingsSelectionMenuHint,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -74,7 +75,7 @@ class _ActionTile extends ConsumerWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('In overflow'),
+          Text(AppLocalizations.of(context).settingsSelectionMenuInOverflow),
           const SizedBox(width: 8),
           Switch(
             value: action.overflow,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../domain/affiliation.dart';
 import '../domain/character.dart';
@@ -16,9 +17,10 @@ class CharactersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chars = ref.watch(charactersProvider);
+    final l = AppLocalizations.of(context);
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/characters'),
-      appBar: AppBar(title: const Text('Characters')),
+      appBar: AppBar(title: Text(l.navCharacters)),
       body: chars.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
@@ -53,7 +55,7 @@ class CharactersScreen extends ConsumerWidget {
                     tilePadding: const EdgeInsets.symmetric(horizontal: 4),
                     childrenPadding: EdgeInsets.zero,
                     title: Text(
-                      (series ?? 'Other').toUpperCase(),
+                      (series ?? l.libraryGroupOther).toUpperCase(),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.primary,
                         fontWeight: FontWeight.w700,
@@ -166,7 +168,7 @@ class _SeriesAffiliations extends ConsumerWidget {
                   tilePadding: const EdgeInsets.symmetric(horizontal: 12),
                   childrenPadding: EdgeInsets.zero,
                   title: Text(
-                    'Unaffiliated',
+                    AppLocalizations.of(context).charactersUnaffiliated,
                     style: theme.textTheme.labelLarge?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
@@ -259,7 +261,7 @@ class _CharacterCard extends ConsumerWidget {
           children: [
             IconButton(
               icon: const Icon(Icons.timeline),
-              tooltip: 'View timeline',
+              tooltip: AppLocalizations.of(context).charactersTimelineTooltip,
               onPressed: character.id == null
                   ? null
                   : () => Navigator.of(context).push(
@@ -272,7 +274,7 @@ class _CharacterCard extends ConsumerWidget {
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
-              tooltip: 'Delete character',
+              tooltip: AppLocalizations.of(context).charactersDeleteTooltip,
               onPressed: () => _confirmDelete(context, ref),
             ),
             const Icon(Icons.expand_more),
@@ -320,24 +322,23 @@ class _CharacterCard extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final l = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (dCtx) => AlertDialog(
-        title: Text('Delete "${character.name}"?'),
-        content: const Text(
-          'Removes the character and every saved description.',
-        ),
+        title: Text(l.charactersDeleteTitle(character.name)),
+        content: Text(l.charactersDeleteBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dCtx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l.actionCancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.of(dCtx).pop(true),
-            child: const Text('Delete'),
+            child: Text(l.actionDelete),
           ),
         ],
       ),
@@ -353,6 +354,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -365,11 +367,10 @@ class _EmptyState extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 16),
-            Text('No characters yet', style: theme.textTheme.titleMedium),
+            Text(l.charactersEmptyTitle, style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
-              'In the reader, long-press a passage that describes a '
-              'character and tap "Character".',
+              l.charactersEmptyHint,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

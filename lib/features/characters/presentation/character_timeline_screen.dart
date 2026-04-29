@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../domain/character.dart';
@@ -60,9 +61,10 @@ class _CharacterTimelineScreenState
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.character.name} — timeline'),
+        title: Text(l.charactersTimelineTitle(widget.character.name)),
       ),
       body: SafeArea(
         child: FutureBuilder<List<Book>>(
@@ -73,11 +75,11 @@ class _CharacterTimelineScreenState
             }
             final books = snap.data!;
             if (books.isEmpty) {
-              return const Center(
+              return Center(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
                   child: Text(
-                    'No EPUB books found in this character\'s series.',
+                    l.charactersTimelineNoEpub,
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -103,9 +105,9 @@ class _CharacterTimelineScreenState
                 children: [
                   DropdownButtonFormField<int>(
                     initialValue: currentValue,
-                    decoration: const InputDecoration(
-                      labelText: 'Book',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: l.charactersTimelineBookLabel,
+                      border: const OutlineInputBorder(),
                     ),
                     items: [
                       for (final b in books)
@@ -144,18 +146,17 @@ class _CharacterTimelineScreenState
           return const Center(child: CircularProgressIndicator());
         }
         final points = snap.data!;
+        final l = AppLocalizations.of(context);
         if (points.isEmpty) {
-          return const Center(
-            child: Text(
-              'Timeline available for EPUB only.',
-            ),
+          return Center(
+            child: Text(l.charactersTimelineEpubOnly),
           );
         }
         final total = points.fold<int>(0, (s, p) => s + p.mentions);
         if (total == 0) {
           return Center(
             child: Text(
-              '${widget.character.name} is not mentioned in this book.',
+              l.charactersTimelineNotMentioned(widget.character.name),
               textAlign: TextAlign.center,
             ),
           );
@@ -233,8 +234,8 @@ class _CharacterTimelineScreenState
                 getTooltipItem: (group, _, rod, __) {
                   final p = points[group.x];
                   return BarTooltipItem(
-                    '${p.chapterTitle}\n${p.mentions} mention'
-                    '${p.mentions == 1 ? '' : 's'}',
+                    '${p.chapterTitle}\n'
+                    '${l.charactersTimelineMentions(p.mentions)}',
                     const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,

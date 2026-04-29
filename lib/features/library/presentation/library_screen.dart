@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../../bundles/presentation/widgets/share_bundle_dialog.dart';
 import '../domain/book.dart';
@@ -16,20 +17,21 @@ class LibraryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final library = ref.watch(libraryProvider);
+    final l = AppLocalizations.of(context);
 
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/'),
       appBar: AppBar(
-        title: const Text('Library'),
+        title: Text(l.navLibrary),
         actions: [
           IconButton(
             icon: const Icon(Icons.travel_explore),
-            tooltip: 'Scan device for books',
+            tooltip: l.libraryScanTooltip,
             onPressed: () => _onScan(context, ref),
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh covers & metadata',
+            tooltip: l.libraryRefreshTooltip,
             onPressed: () => _onRefreshMetadata(context, ref),
           ),
           IconButton(
@@ -41,7 +43,7 @@ class LibraryScreen extends ConsumerWidget {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _onImport(context, ref),
         icon: const Icon(Icons.add),
-        label: const Text('Add books'),
+        label: Text(l.libraryAddBooks),
       ),
       body: library.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -64,6 +66,7 @@ class LibraryScreen extends ConsumerWidget {
   }
 
   Future<void> _onImport(BuildContext context, WidgetRef ref) async {
+    final l = AppLocalizations.of(context);
     try {
       final added =
           await ref.read(libraryProvider.notifier).importFromPicker();
@@ -73,35 +76,34 @@ class LibraryScreen extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            added == 0
-                ? 'No new books added.'
-                : 'Added $added book${added == 1 ? '' : 's'}.',
+            added == 0 ? l.libraryImportNone : l.libraryImportAdded(added),
           ),
         ),
       );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Import failed: $e')),
+        SnackBar(content: Text(l.libraryImportFailed(e.toString()))),
       );
     }
   }
 
   Future<void> _onRefreshMetadata(BuildContext context, WidgetRef ref) async {
+    final l = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      const SnackBar(
-        duration: Duration(minutes: 5),
+      SnackBar(
+        duration: const Duration(minutes: 5),
         content: Row(
           children: [
-            SizedBox(
+            const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            SizedBox(width: 12),
-            Text('Refreshing covers & metadata…'),
+            const SizedBox(width: 12),
+            Text(l.libraryRefreshing),
           ],
         ),
       ),
@@ -114,16 +116,16 @@ class LibraryScreen extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            n == 0
-                ? 'All books already have metadata.'
-                : 'Refreshed $n book${n == 1 ? '' : 's'}.',
+            n == 0 ? l.libraryRefreshAllHave : l.libraryRefreshDone(n),
           ),
         ),
       );
     } catch (e) {
       if (!context.mounted) return;
       messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(l.libraryRefreshFailed(e.toString()))),
+      );
     }
   }
 
@@ -137,20 +139,21 @@ class LibraryScreen extends ConsumerWidget {
   }
 
   Future<void> _onScan(BuildContext context, WidgetRef ref) async {
+    final l = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      const SnackBar(
-        duration: Duration(minutes: 5),
+      SnackBar(
+        duration: const Duration(minutes: 5),
         content: Row(
           children: [
-            SizedBox(
+            const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            SizedBox(width: 12),
-            Text('Scanning device for books…'),
+            const SizedBox(width: 12),
+            Text(l.libraryScanning),
           ],
         ),
       ),
@@ -162,16 +165,16 @@ class LibraryScreen extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            added == 0
-                ? 'No new books found.'
-                : 'Found and added $added book${added == 1 ? '' : 's'}.',
+            added == 0 ? l.libraryScanNoneFound : l.libraryScanAdded(added),
           ),
         ),
       );
     } catch (e) {
       if (!context.mounted) return;
       messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(SnackBar(content: Text('Scan failed: $e')));
+      messenger.showSnackBar(
+        SnackBar(content: Text(l.libraryScanFailed(e.toString()))),
+      );
     }
   }
 
@@ -180,6 +183,7 @@ class LibraryScreen extends ConsumerWidget {
     String seriesName,
     List<Book> seriesBooks,
   ) {
+    final l = AppLocalizations.of(context);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -193,15 +197,13 @@ class LibraryScreen extends ConsumerWidget {
                 seriesName,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: Text(
-                '${seriesBooks.length} book'
-                '${seriesBooks.length == 1 ? '' : 's'} in series',
-              ),
+              subtitle:
+                  Text(l.librarySeriesBooksCount(seriesBooks.length)),
             ),
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.share_outlined),
-              title: const Text('Share series bundle'),
+              title: Text(l.actionShareSeriesBundle),
               onTap: () {
                 Navigator.pop(sheetContext);
                 showShareSeriesBundleDialog(
@@ -218,6 +220,7 @@ class LibraryScreen extends ConsumerWidget {
   }
 
   void _showBookActions(BuildContext context, WidgetRef ref, Book book) {
+    final l = AppLocalizations.of(context);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -236,7 +239,7 @@ class LibraryScreen extends ConsumerWidget {
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.menu_book_outlined),
-              title: const Text('Open'),
+              title: Text(l.actionOpen),
               onTap: () {
                 Navigator.pop(sheetContext);
                 context.push('/read/${book.id}');
@@ -244,7 +247,7 @@ class LibraryScreen extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('Book info'),
+              title: Text(l.actionBookInfo),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _showBookInfo(context, book);
@@ -252,7 +255,7 @@ class LibraryScreen extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.edit_outlined),
-              title: const Text('Edit info'),
+              title: Text(l.actionEditInfo),
               onTap: () {
                 Navigator.pop(sheetContext);
                 showBookEditSheet(context, book: book);
@@ -260,7 +263,7 @@ class LibraryScreen extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.share_outlined),
-              title: const Text('Share book bundle'),
+              title: Text(l.actionShareBundle),
               onTap: () {
                 Navigator.pop(sheetContext);
                 showShareBundleDialog(context, book);
@@ -268,7 +271,7 @@ class LibraryScreen extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline),
-              title: const Text('Remove from library'),
+              title: Text(l.actionRemoveFromLibrary),
               onTap: () async {
                 Navigator.pop(sheetContext);
                 if (book.id != null) {
@@ -306,6 +309,7 @@ class _SeriesGroupedLibrary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
     final groups = <String?, List<Book>>{};
     for (final book in books) {
       final raw = book.series?.trim();
@@ -335,8 +339,6 @@ class _SeriesGroupedLibrary extends StatelessWidget {
       children: [
         for (final series in keys)
           Theme(
-            // Hide the default ExpansionTile divider so the group
-            // header blends with the grid below.
             data: theme.copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
               initiallyExpanded: true,
@@ -348,7 +350,7 @@ class _SeriesGroupedLibrary extends StatelessWidget {
                     ? () => onSeriesLongPress(series, groups[series]!)
                     : null,
                 child: Text(
-                  (series ?? 'Other').toUpperCase(),
+                  (series ?? l.libraryGroupOther).toUpperCase(),
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.w700,
@@ -392,6 +394,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -405,12 +408,12 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Your library is empty',
+              l.libraryEmptyTitle,
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              'Tap "Add books" to import EPUB, PDF, or TXT files.',
+              l.libraryEmptyHint,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

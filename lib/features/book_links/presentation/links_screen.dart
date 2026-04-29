@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../../library/providers/library_provider.dart';
 import '../domain/book_link.dart';
@@ -14,16 +15,20 @@ class LinksScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final links = ref.watch(bookLinksProvider);
+    final l = AppLocalizations.of(context);
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         drawer: const MainDrawer(currentRoute: '/links'),
         appBar: AppBar(
-          title: const Text('Links'),
-          bottom: const TabBar(
+          title: Text(l.navLinks),
+          bottom: TabBar(
             tabs: [
-              Tab(icon: Icon(Icons.account_tree_outlined), text: 'Graph'),
-              Tab(icon: Icon(Icons.list), text: 'List'),
+              Tab(
+                icon: const Icon(Icons.account_tree_outlined),
+                text: l.linksTabGraph,
+              ),
+              Tab(icon: const Icon(Icons.list), text: l.linksTabList),
             ],
           ),
         ),
@@ -139,7 +144,7 @@ class _LinkCard extends ConsumerWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.menu_book_outlined),
-              title: const Text('Open source book'),
+              title: Text(AppLocalizations.of(context).linksOpenSource),
               onTap: () {
                 Navigator.pop(sheetContext);
                 context.push('/read/${link.sourceBookId}');
@@ -147,7 +152,7 @@ class _LinkCard extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.east),
-              title: const Text('Open target book'),
+              title: Text(AppLocalizations.of(context).linksOpenTarget),
               onTap: () {
                 Navigator.pop(sheetContext);
                 context.push('/read/${link.targetBookId}');
@@ -155,7 +160,7 @@ class _LinkCard extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline),
-              title: const Text('Delete'),
+              title: Text(AppLocalizations.of(context).actionDelete),
               onTap: () async {
                 Navigator.pop(sheetContext);
                 if (link.id != null) {
@@ -196,11 +201,13 @@ class _EmptyState extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 16),
-            Text('No links yet', style: theme.textTheme.titleMedium),
+            Text(
+              AppLocalizations.of(context).linksEmptyTitle,
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text(
-              'Long-press a passage in the reader and tap "Link" to '
-              'point at another book in your library.',
+              AppLocalizations.of(context).linksEmptyHint,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

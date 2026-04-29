@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../services/backup_service.dart';
 
@@ -23,18 +24,13 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
   String? _stage;
 
   Future<void> _export() async {
+    final l = AppLocalizations.of(context);
     if (Platform.isAndroid) {
       final granted = await _ensureStoragePermission();
       if (!granted) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Storage permission denied — backup will be saved in '
-              'app-private storage and will only be accessible via '
-              'Share.',
-            ),
-          ),
+          SnackBar(content: Text(l.backupPermissionWarning)),
         );
       }
     }
@@ -49,10 +45,10 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Backup written to $path'),
+          content: Text(l.backupWrittenTo(path)),
           duration: const Duration(seconds: 8),
           action: SnackBarAction(
-            label: 'Copy path',
+            label: l.actionCopyPath,
             onPressed: () {
               Clipboard.setData(ClipboardData(text: path));
             },
@@ -67,7 +63,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Export failed: $e')),
+        SnackBar(content: Text(l.backupExportFailed(e.toString()))),
       );
     } finally {
       if (mounted) {
@@ -95,23 +91,20 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     if (path == null) return;
 
     if (!mounted) return;
+    final l = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Replace all data?'),
-        content: const Text(
-          'Restoring will permanently overwrite your current library, '
-          'citations, characters, dictionary, and reader settings with '
-          'the contents of the backup. This cannot be undone.',
-        ),
+        title: Text(l.backupReplaceTitle),
+        content: Text(l.backupReplaceBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l.actionCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Restore'),
+            child: Text(l.actionRestore),
           ),
         ],
       ),
@@ -132,16 +125,19 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: const Text('Restore complete'),
+          title: Text(l.backupRestoreCompleteTitle),
           content: Text(
-            'Restored ${summary.filesRestored} files'
-            '${summary.backupCreatedAt != null ? '\nBackup taken ${summary.backupCreatedAt}' : ''}'
-            '\n\nClose and reopen the app to load the restored data.',
+            l.backupRestoreCompleteBody(
+              summary.filesRestored,
+              summary.backupCreatedAt != null
+                  ? l.backupTakenAtSuffix(summary.backupCreatedAt!)
+                  : '',
+            ),
           ),
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+              child: Text(l.actionOK),
             ),
           ],
         ),
@@ -149,7 +145,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restore failed: $e')),
+        SnackBar(content: Text(l.backupRestoreFailed(e.toString()))),
       );
     } finally {
       if (mounted) {
@@ -164,38 +160,33 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/backup'),
-      appBar: AppBar(title: const Text('Backup & restore')),
+      appBar: AppBar(title: Text(l.navBackup)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Export bundles your library files, covers, database '
-                '(books, citations, characters, dictionary, progress) '
-                'and reader settings into a single .zip you can share '
-                'or save off-device.',
-                style: theme.textTheme.bodyMedium,
-              ),
+              Text(l.backupIntro, style: theme.textTheme.bodyMedium),
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: _busy ? null : _export,
                 icon: const Icon(Icons.cloud_upload_outlined),
-                label: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Export backup'),
+                label: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(l.backupExportButton),
                 ),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _busy ? null : _restore,
                 icon: const Icon(Icons.cloud_download_outlined),
-                label: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Restore from backup'),
+                label: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(l.backupRestoreButton),
                 ),
               ),
               const SizedBox(height: 24),
@@ -205,16 +196,14 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
                     const LinearProgressIndicator(),
                     const SizedBox(height: 8),
                     Text(
-                      _stage ?? 'Working…',
+                      _stage ?? l.readerWorking,
                       style: theme.textTheme.bodySmall,
                     ),
                   ],
                 ),
               const Spacer(),
               Text(
-                'Restoring overwrites all current data. The app must be '
-                'closed and reopened afterwards for the change to take '
-                'effect.',
+                l.backupRestoreFooter,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

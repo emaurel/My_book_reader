@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../../library/providers/library_provider.dart';
 import '../../domain/book_link.dart';
 import '../../providers/book_link_provider.dart';
@@ -66,13 +67,17 @@ class _BookLinksSheet extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (outgoing.isEmpty && incoming.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Center(child: Text('No links')),
+                          Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Center(
+                              child: Text(
+                                AppLocalizations.of(context).linksSheetNoLinks,
+                              ),
+                            ),
                           ),
                         if (outgoing.isNotEmpty) ...[
-                          const _SectionHeader(
-                            label: 'Links from this book',
+                          _SectionHeader(
+                            label: AppLocalizations.of(context).linksSheetFromBook,
                           ),
                           ..._buildLinkRows(
                             context,
@@ -82,8 +87,8 @@ class _BookLinksSheet extends ConsumerWidget {
                           ),
                         ],
                         if (incoming.isNotEmpty) ...[
-                          const _SectionHeader(
-                            label: 'Links to this book',
+                          _SectionHeader(
+                            label: AppLocalizations.of(context).linksSheetToBook,
                           ),
                           ..._buildLinkRows(
                             context,

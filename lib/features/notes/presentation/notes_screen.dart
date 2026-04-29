@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../../library/providers/library_provider.dart';
 import '../domain/note.dart';
@@ -16,7 +17,7 @@ class NotesScreen extends ConsumerWidget {
     final notes = ref.watch(notesProvider);
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/notes'),
-      appBar: AppBar(title: const Text('Notes')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).navNotes)),
       body: notes.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
@@ -102,7 +103,7 @@ class _NoteCard extends ConsumerWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.edit_outlined),
-              title: const Text('Edit'),
+              title: Text(AppLocalizations.of(context).actionEdit),
               onTap: () async {
                 Navigator.pop(sheetContext);
                 if (note.id == null) return;
@@ -116,7 +117,7 @@ class _NoteCard extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline),
-              title: const Text('Delete'),
+              title: Text(AppLocalizations.of(context).actionDelete),
               onTap: () async {
                 Navigator.pop(sheetContext);
                 if (note.id != null) {
@@ -151,11 +152,13 @@ class _EmptyState extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 16),
-            Text('No notes yet', style: theme.textTheme.titleMedium),
+            Text(
+              AppLocalizations.of(context).notesEmptyTitle,
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text(
-              'Long-press a passage in the reader, tap "…" then "Note" '
-              'to attach a thought.',
+              AppLocalizations.of(context).notesEmptyHint,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
