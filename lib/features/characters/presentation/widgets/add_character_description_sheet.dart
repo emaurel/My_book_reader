@@ -14,6 +14,7 @@ Future<bool?> showAddCharacterDescriptionSheet(
   required String text,
   int? bookId,
   int? chapterIndex,
+  int? pageInChapter,
   String? bookSeries,
 }) {
   return showModalBottomSheet<bool>(
@@ -28,6 +29,7 @@ Future<bool?> showAddCharacterDescriptionSheet(
         text: text,
         bookId: bookId,
         chapterIndex: chapterIndex,
+        pageInChapter: pageInChapter,
         bookSeries: bookSeries,
       ),
     ),
@@ -39,11 +41,13 @@ class _AddCharacterDescriptionSheet extends ConsumerStatefulWidget {
     required this.text,
     this.bookId,
     this.chapterIndex,
+    this.pageInChapter,
     this.bookSeries,
   });
   final String text;
   final int? bookId;
   final int? chapterIndex;
+  final int? pageInChapter;
   final String? bookSeries;
 
   @override
@@ -93,6 +97,18 @@ class _AddCharacterDescriptionSheetState
           characterId = await ref
               .read(charactersProvider.notifier)
               .create(name: name, series: scope);
+          // First time we see this character — anchor "first seen"
+          // to where the user is, so other readers in this series
+          // still get a hidden placeholder until they reach this
+          // point too.
+          if (widget.bookId != null) {
+            await repo.setFirstSeen(
+              characterId: characterId,
+              bookId: widget.bookId,
+              chapterIndex: widget.chapterIndex,
+              pageInChapter: widget.pageInChapter,
+            );
+          }
         } catch (e) {
           setState(() => _saving = false);
           if (!mounted) return;
@@ -115,6 +131,7 @@ class _AddCharacterDescriptionSheetState
       bookId: widget.bookId,
       spoilerBookId: widget.bookId,
       spoilerChapterIndex: widget.chapterIndex,
+      spoilerPageInChapter: widget.pageInChapter,
     );
     ref.read(characterRevisionProvider.notifier).state++;
 

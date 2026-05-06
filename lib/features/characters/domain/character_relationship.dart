@@ -59,6 +59,7 @@ class CharacterRelationship {
     this.note,
     this.spoilerBookId,
     this.spoilerChapterIndex,
+    this.spoilerPageInChapter,
     required this.createdAt,
   });
 
@@ -69,6 +70,7 @@ class CharacterRelationship {
   final String? note;
   final int? spoilerBookId;
   final int? spoilerChapterIndex;
+  final int? spoilerPageInChapter;
   final DateTime createdAt;
 
   Map<String, dynamic> toMap() => {
@@ -79,6 +81,7 @@ class CharacterRelationship {
         'note': note,
         'spoiler_book_id': spoilerBookId,
         'spoiler_chapter_index': spoilerChapterIndex,
+        'spoiler_page_in_chapter': spoilerPageInChapter,
         'created_at': createdAt.millisecondsSinceEpoch,
       };
 
@@ -91,6 +94,7 @@ class CharacterRelationship {
         note: m['note'] as String?,
         spoilerBookId: m['spoiler_book_id'] as int?,
         spoilerChapterIndex: m['spoiler_chapter_index'] as int?,
+        spoilerPageInChapter: m['spoiler_page_in_chapter'] as int?,
         createdAt:
             DateTime.fromMillisecondsSinceEpoch(m['created_at'] as int),
       );

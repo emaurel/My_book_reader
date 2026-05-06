@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../library/data/book_repository.dart';
 import '../../../library/providers/library_provider.dart';
 import '../../domain/character.dart';
 import '../../domain/character_description.dart';
 import '../../providers/character_provider.dart';
+import '../../services/spoiler_position.dart';
 import 'character_affiliations_editor.dart';
 import 'character_alias_editor.dart';
 import 'character_description_card.dart';
+import 'character_status_editor.dart';
 
 /// Sheet shown when an underlined character name is tapped. Lists every
 /// saved description for that character; lets the user manage aliases
@@ -25,11 +26,17 @@ Future<void> showCharacterDescriptionsSheet(
   String? bookSeries,
   int? currentBookId,
   int? currentChapterIndex,
+  int? currentPageInChapter,
 }) {
+  // Cap the sheet at 80% of the screen so a character with a lot of
+  // descriptions / relationships doesn't open as a full-screen takeover
+  // that the user has to scroll back down before they can dismiss it.
+  final maxH = MediaQuery.of(context).size.height * 0.8;
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    constraints: BoxConstraints(maxHeight: maxH),
     builder: (sheetCtx) => Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.viewInsetsOf(sheetCtx).bottom,
@@ -40,6 +47,7 @@ Future<void> showCharacterDescriptionsSheet(
         bookSeries: bookSeries,
         currentBookId: currentBookId,
         currentChapterIndex: currentChapterIndex,
+        currentPageInChapter: currentPageInChapter,
       ),
     ),
   );
@@ -52,12 +60,14 @@ class _CharacterDescriptionsSheet extends ConsumerWidget {
     this.bookSeries,
     this.currentBookId,
     this.currentChapterIndex,
+    this.currentPageInChapter,
   });
   final String tappedName;
   final int? characterId;
   final String? bookSeries;
   final int? currentBookId;
   final int? currentChapterIndex;
+  final int? currentPageInChapter;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -92,6 +102,7 @@ class _CharacterDescriptionsSheet extends ConsumerWidget {
               character: character,
               currentBookId: currentBookId,
               currentChapterIndex: currentChapterIndex,
+              currentPageInChapter: currentPageInChapter,
             );
           },
         ),
@@ -116,10 +127,12 @@ class _CharacterBody extends ConsumerStatefulWidget {
     required this.character,
     this.currentBookId,
     this.currentChapterIndex,
+    this.currentPageInChapter,
   });
   final Character character;
   final int? currentBookId;
   final int? currentChapterIndex;
+  final int? currentPageInChapter;
 
   @override
   ConsumerState<_CharacterBody> createState() => _CharacterBodyState();
@@ -143,6 +156,13 @@ class _CharacterBodyState extends ConsumerState<_CharacterBody> {
           ),
         ),
         const SizedBox(height: 12),
+        _SpoilerAwareStatusRow(
+          character: widget.character,
+          currentBookId: widget.currentBookId,
+          currentChapterIndex: widget.currentChapterIndex,
+          currentPageInChapter: widget.currentPageInChapter,
+        ),
+        const Divider(),
         CharacterAliasEditor(character: widget.character),
         const SizedBox(height: 12),
         CharacterAffiliationsEditor(character: widget.character),
@@ -164,12 +184,41 @@ class _CharacterBodyState extends ConsumerState<_CharacterBody> {
               all: list,
               currentBookId: widget.currentBookId,
               currentChapterIndex: widget.currentChapterIndex,
+              currentPageInChapter: widget.currentPageInChapter,
               revealAll: _revealSpoilers,
               onRevealAll: () => setState(() => _revealSpoilers = true),
             );
           },
         ),
       ],
+    );
+  }
+}
+
+/// Thin pass-through to [CharacterStatusEditor]. The editor now does
+/// its own resolved-status rendering using the reader-position
+/// provider, so the wrapper's only role left is to forward the
+/// (book, chapter, page) defaults the in-reader sheet was given.
+class _SpoilerAwareStatusRow extends StatelessWidget {
+  const _SpoilerAwareStatusRow({
+    required this.character,
+    this.currentBookId,
+    this.currentChapterIndex,
+    this.currentPageInChapter,
+  });
+
+  final Character character;
+  final int? currentBookId;
+  final int? currentChapterIndex;
+  final int? currentPageInChapter;
+
+  @override
+  Widget build(BuildContext context) {
+    return CharacterStatusEditor(
+      character: character,
+      currentBookId: currentBookId,
+      currentChapterIndex: currentChapterIndex,
+      currentPageInChapter: currentPageInChapter,
     );
   }
 }
@@ -181,6 +230,7 @@ class _DescriptionsList extends ConsumerWidget {
     required this.onRevealAll,
     this.currentBookId,
     this.currentChapterIndex,
+    this.currentPageInChapter,
   });
 
   final List<CharacterDescription> all;
@@ -188,15 +238,13 @@ class _DescriptionsList extends ConsumerWidget {
   final VoidCallback onRevealAll;
   final int? currentBookId;
   final int? currentChapterIndex;
+  final int? currentPageInChapter;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // No reader context → show everything.
     if (currentBookId == null) {
       return _list(all);
     }
-    // Determine spoiler hits asynchronously so we can compare books'
-    // seriesNumber across the user's library.
     return FutureBuilder<List<bool>>(
       future: _classifySpoilers(ref),
       builder: (_, snap) {
@@ -250,53 +298,24 @@ class _DescriptionsList extends ConsumerWidget {
   Future<List<bool>> _classifySpoilers(WidgetRef ref) async {
     final repo = ref.read(bookRepositoryProvider);
     final currentBook = await repo.getById(currentBookId!);
-    final currentSeries = currentBook?.series;
-    final currentSeriesNum = currentBook?.seriesNumber;
-    final currentChapter = currentChapterIndex ?? 0;
-
+    final position = ReaderPosition(
+      bookId: currentBookId!,
+      chapterIndex: currentChapterIndex ?? 0,
+      pageInChapter: currentPageInChapter ?? 0,
+      series: currentBook?.series,
+      seriesNumber: currentBook?.seriesNumber,
+    );
+    final cache = BookMetadataCache(repo);
     final result = <bool>[];
     for (final d in all) {
-      result.add(await _isSpoiler(
-        d,
-        repo,
-        currentBookId!,
-        currentSeries,
-        currentSeriesNum,
-        currentChapter,
-      ));
+      final anchor = await cache.hydrate(
+        bookId: d.spoilerBookId,
+        chapterIndex: d.spoilerChapterIndex,
+        pageInChapter: d.spoilerPageInChapter,
+      );
+      final order = compareAnchor(anchor, position);
+      result.add(order == AnchorOrder.ahead);
     }
     return result;
-  }
-
-  Future<bool> _isSpoiler(
-    CharacterDescription d,
-    BookRepository repo,
-    int currentBookId,
-    String? currentSeries,
-    double? currentSeriesNum,
-    int currentChapter,
-  ) async {
-    if (d.spoilerBookId == null && d.spoilerChapterIndex == null) {
-      return false;
-    }
-    if (d.spoilerBookId == currentBookId) {
-      // Same book: spoil if the user is BEFORE the spoiler chapter.
-      final spoilerCh = d.spoilerChapterIndex;
-      if (spoilerCh == null) return false;
-      return currentChapter < spoilerCh;
-    }
-    // Different book: check series order via seriesNumber.
-    final spoilerBook = await repo.getById(d.spoilerBookId ?? -1);
-    if (spoilerBook == null) return false;
-    if (spoilerBook.series == null ||
-        spoilerBook.series != currentSeries ||
-        spoilerBook.seriesNumber == null ||
-        currentSeriesNum == null) {
-      // Can't compare across unrelated books — show by default to
-      // avoid hiding non-spoiler context that just happens to come
-      // from another book.
-      return false;
-    }
-    return spoilerBook.seriesNumber! > currentSeriesNum;
   }
 }

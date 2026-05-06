@@ -6,8 +6,10 @@ import '../../../l10n/app_localizations.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../domain/character.dart';
+import '../domain/custom_status.dart';
 import '../providers/character_provider.dart';
 import '../services/character_timeline_service.dart';
+import 'widgets/character_status_indicator.dart';
 
 class CharacterTimelineScreen extends ConsumerStatefulWidget {
   const CharacterTimelineScreen({super.key, required this.character});
@@ -55,9 +57,20 @@ class _CharacterTimelineScreenState
       _selectedBookId = book.id;
       _future = CharacterTimelineService(
         ref.read(characterRepositoryProvider),
+        books: ref.read(bookRepositoryProvider),
       ).compute(characterId: widget.character.id!, book: book);
     });
   }
+
+  StatusDisplay _displayFor(
+    TimelinePoint p,
+    List<CustomStatus> customs,
+  ) =>
+      statusDisplayFor(
+        builtIn: p.status,
+        customId: p.customStatusId,
+        customs: customs,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +141,13 @@ class _CharacterTimelineScreenState
                   ),
                   const SizedBox(height: 16),
                   Expanded(child: _buildChart()),
+                  const SizedBox(height: 12),
+                  _StatusLegend(
+                    customs: ref.watch(customStatusesProvider).maybeWhen(
+                          data: (list) => list,
+                          orElse: () => const <CustomStatus>[],
+                        ),
+                  ),
                 ],
               ),
             );
@@ -162,6 +182,10 @@ class _CharacterTimelineScreenState
           );
         }
         final theme = Theme.of(context);
+        final customs = ref.watch(customStatusesProvider).maybeWhen(
+              data: (list) => list,
+              orElse: () => const <CustomStatus>[],
+            );
         final maxMentions =
             points.fold<int>(0, (m, p) => p.mentions > m ? p.mentions : m);
         final yMax = (maxMentions * 1.2).clamp(1, 99999).toDouble();
@@ -223,7 +247,7 @@ class _CharacterTimelineScreenState
                     BarChartRodData(
                       toY: points[i].mentions.toDouble(),
                       width: 5,
-                      color: theme.colorScheme.primary,
+                      color: _displayFor(points[i], customs).color,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ],
@@ -235,7 +259,8 @@ class _CharacterTimelineScreenState
                   final p = points[group.x];
                   return BarTooltipItem(
                     '${p.chapterTitle}\n'
-                    '${l.charactersTimelineMentions(p.mentions)}',
+                    '${l.charactersTimelineMentions(p.mentions)}\n'
+                    '${_displayFor(p, customs).label}',
                     const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -247,6 +272,53 @@ class _CharacterTimelineScreenState
           ),
         );
       },
+    );
+  }
+}
+
+class _StatusLegend extends StatelessWidget {
+  const _StatusLegend({required this.customs});
+  final List<CustomStatus> customs;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Wrap(
+      spacing: 14,
+      runSpacing: 6,
+      children: [
+        for (final s in CharacterStatus.values)
+          _legendChip(
+            theme,
+            label: builtInStatusLabel(s),
+            color: builtInStatusColor(s),
+          ),
+        for (final c in customs)
+          _legendChip(
+            theme,
+            label: c.name,
+            color: Color(c.colorArgb),
+          ),
+      ],
+    );
+  }
+
+  Widget _legendChip(
+    ThemeData theme, {
+    required String label,
+    required Color color,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: theme.textTheme.bodySmall),
+      ],
     );
   }
 }

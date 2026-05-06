@@ -6,6 +6,7 @@ class CharacterDescription {
     this.bookId,
     this.spoilerBookId,
     this.spoilerChapterIndex,
+    this.spoilerPageInChapter,
     required this.createdAt,
   });
 
@@ -23,6 +24,11 @@ class CharacterDescription {
   final int? spoilerBookId;
   final int? spoilerChapterIndex;
 
+  /// Page within the spoiler chapter — lets the user gate "X dies on
+  /// the last page of this chapter" so a reader on page 3 of the
+  /// same chapter doesn't get spoiled.
+  final int? spoilerPageInChapter;
+
   final DateTime createdAt;
 
   bool get hasSpoilerAnchor =>
@@ -35,6 +41,7 @@ class CharacterDescription {
         'book_id': bookId,
         'spoiler_book_id': spoilerBookId,
         'spoiler_chapter_index': spoilerChapterIndex,
+        'spoiler_page_in_chapter': spoilerPageInChapter,
         'created_at': createdAt.millisecondsSinceEpoch,
       };
 
@@ -46,6 +53,7 @@ class CharacterDescription {
         bookId: m['book_id'] as int?,
         spoilerBookId: m['spoiler_book_id'] as int?,
         spoilerChapterIndex: m['spoiler_chapter_index'] as int?,
+        spoilerPageInChapter: m['spoiler_page_in_chapter'] as int?,
         createdAt:
             DateTime.fromMillisecondsSinceEpoch(m['created_at'] as int),
       );

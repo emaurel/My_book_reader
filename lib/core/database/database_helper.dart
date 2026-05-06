@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'book_reader.db';
-  static const _dbVersion = 17;
+  static const _dbVersion = 21;
 
   /// Exposed for the backup service so it can reject backups taken on
   /// future app versions whose DB schema we don't yet understand.
@@ -176,11 +176,18 @@ class DatabaseHelper {
         series TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER,
-        status TEXT,
+        status TEXT NOT NULL DEFAULT 'alive',
+        status_custom_id INTEGER,
         status_spoiler_book_id INTEGER,
         status_spoiler_chapter_index INTEGER,
+        status_spoiler_page_in_chapter INTEGER,
+        first_seen_book_id INTEGER,
+        first_seen_chapter_index INTEGER,
+        first_seen_page_in_chapter INTEGER,
         UNIQUE(name, series),
-        FOREIGN KEY (status_spoiler_book_id) REFERENCES books(id) ON DELETE SET NULL
+        FOREIGN KEY (status_spoiler_book_id) REFERENCES books(id) ON DELETE SET NULL,
+        FOREIGN KEY (first_seen_book_id) REFERENCES books(id) ON DELETE SET NULL,
+        FOREIGN KEY (status_custom_id) REFERENCES custom_statuses(id) ON DELETE SET NULL
       )
     ''');
     await db.execute('''
@@ -191,6 +198,7 @@ class DatabaseHelper {
         book_id INTEGER,
         spoiler_book_id INTEGER,
         spoiler_chapter_index INTEGER,
+        spoiler_page_in_chapter INTEGER,
         created_at INTEGER NOT NULL,
         FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
         FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL,
@@ -212,6 +220,53 @@ class DatabaseHelper {
     await _createCharacterAliasesTable(db);
     await _createAffiliationTables(db);
     await _createCharacterRelationshipsTable(db);
+    await _createCustomStatusesTable(db);
+    await _createCharacterStatusHistoryTable(db);
+  }
+
+  /// Per-character timeline of status changes. Each row is "from this
+  /// (book, chapter, page) onward, the character's status is X".
+  /// The status displayed at a given reader position is the latest entry
+  /// whose anchor sits at-or-before the reader. With no entries, the
+  /// character's default status field on `characters` applies. When
+  /// [custom_status_id] is set, it overrides [status] — the built-in
+  /// enum value in [status] is just a placeholder to satisfy the
+  /// NOT NULL constraint inherited from the original schema.
+  Future<void> _createCharacterStatusHistoryTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS character_status_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        character_id INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        custom_status_id INTEGER,
+        book_id INTEGER,
+        chapter_index INTEGER,
+        page_in_chapter INTEGER,
+        note TEXT,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
+        FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL,
+        FOREIGN KEY (custom_status_id) REFERENCES custom_statuses(id) ON DELETE SET NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_char_status_hist_char '
+      'ON character_status_history(character_id)',
+    );
+  }
+
+  /// User-defined status values (name + ARGB color) shown alongside
+  /// the four built-ins (alive/dead/missing/unknown). Built-ins live
+  /// in code; this table only stores rows the user creates manually.
+  Future<void> _createCustomStatusesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS custom_statuses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        color INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    ''');
   }
 
   Future<void> _createCharacterRelationshipsTable(Database db) async {
@@ -224,6 +279,7 @@ class DatabaseHelper {
         note TEXT,
         spoiler_book_id INTEGER,
         spoiler_chapter_index INTEGER,
+        spoiler_page_in_chapter INTEGER,
         created_at INTEGER NOT NULL,
         FOREIGN KEY (from_character_id) REFERENCES characters(id) ON DELETE CASCADE,
         FOREIGN KEY (to_character_id) REFERENCES characters(id) ON DELETE CASCADE,
@@ -423,6 +479,66 @@ class DatabaseHelper {
       );
       await tryExec('ALTER TABLE affiliations ADD COLUMN parent_id INTEGER');
       await _createCharacterRelationshipsTable(db);
+    }
+    if (oldVersion < 18) {
+      // Default every character to "alive" so the status dot is
+      // visible from the start. Existing rows with NULL get
+      // backfilled; future inserts also default at the column level.
+      await tryExec(
+        "UPDATE characters SET status = 'alive' WHERE status IS NULL",
+      );
+    }
+    if (oldVersion < 19) {
+      // Page-level granularity for every spoiler anchor — without
+      // this, marking a character dead "this chapter" leaks if the
+      // reader taps the highlight a page or two before the death.
+      await tryExec(
+        'ALTER TABLE characters ADD COLUMN status_spoiler_page_in_chapter INTEGER',
+      );
+      await tryExec(
+        'ALTER TABLE character_descriptions ADD COLUMN spoiler_page_in_chapter INTEGER',
+      );
+      await tryExec(
+        'ALTER TABLE character_relationships ADD COLUMN spoiler_page_in_chapter INTEGER',
+      );
+    }
+    if (oldVersion < 20) {
+      // Multi-status timeline: a character can change status at many
+      // points across a series. The legacy `status_spoiler_*` triple
+      // becomes a single history entry so existing data isn't lost.
+      await _createCharacterStatusHistoryTable(db);
+      await tryExec(
+        'ALTER TABLE characters ADD COLUMN first_seen_book_id INTEGER',
+      );
+      await tryExec(
+        'ALTER TABLE characters ADD COLUMN first_seen_chapter_index INTEGER',
+      );
+      await tryExec(
+        'ALTER TABLE characters ADD COLUMN first_seen_page_in_chapter INTEGER',
+      );
+      await db.execute('''
+        INSERT INTO character_status_history (
+          character_id, status, book_id, chapter_index, page_in_chapter, created_at
+        )
+        SELECT id, status, status_spoiler_book_id,
+               status_spoiler_chapter_index, status_spoiler_page_in_chapter,
+               COALESCE(updated_at, created_at)
+        FROM characters
+        WHERE status_spoiler_book_id IS NOT NULL
+           OR status_spoiler_chapter_index IS NOT NULL
+      ''');
+    }
+    if (oldVersion < 21) {
+      // Custom statuses — user-defined dot colors / labels alongside
+      // the four built-ins. Must run after v20 so the history table
+      // exists and can receive its new pointer column.
+      await _createCustomStatusesTable(db);
+      await tryExec(
+        'ALTER TABLE characters ADD COLUMN status_custom_id INTEGER',
+      );
+      await tryExec(
+        'ALTER TABLE character_status_history ADD COLUMN custom_status_id INTEGER',
+      );
     }
   }
 }

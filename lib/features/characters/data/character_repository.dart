@@ -5,6 +5,8 @@ import '../domain/affiliation.dart';
 import '../domain/character.dart';
 import '../domain/character_description.dart';
 import '../domain/character_relationship.dart';
+import '../domain/character_status_entry.dart';
+import '../domain/custom_status.dart';
 
 class CharacterRepository {
   Future<Database> get _db async => DatabaseHelper.instance.database;
@@ -65,6 +67,7 @@ class CharacterRepository {
       'series': series,
       'created_at': now,
       'updated_at': now,
+      'status': 'alive',
     });
   }
 
@@ -103,6 +106,7 @@ class CharacterRepository {
     int? bookId,
     int? spoilerBookId,
     int? spoilerChapterIndex,
+    int? spoilerPageInChapter,
   }) async {
     final db = await _db;
     final id = await db.insert('character_descriptions', {
@@ -111,6 +115,7 @@ class CharacterRepository {
       'book_id': bookId,
       'spoiler_book_id': spoilerBookId,
       'spoiler_chapter_index': spoilerChapterIndex,
+      'spoiler_page_in_chapter': spoilerPageInChapter,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
     await _touchCharacter(characterId);
@@ -254,6 +259,18 @@ class CharacterRepository {
   /// underlined token in the reader so we can identify which character
   /// it belongs to.
   // ---- Affiliations ----
+
+  /// Every affiliation across every series — used by the delete
+  /// picker so the user can pick any affiliation regardless of which
+  /// series it belongs to.
+  Future<List<Affiliation>> listAllAffiliations() async {
+    final db = await _db;
+    final rows = await db.query(
+      'affiliations',
+      orderBy: 'series COLLATE NOCASE ASC, name COLLATE NOCASE ASC',
+    );
+    return rows.map(Affiliation.fromMap).toList();
+  }
 
   Future<List<Affiliation>> listAffiliationsForSeries(String? series) async {
     final db = await _db;
@@ -416,17 +433,167 @@ class CharacterRepository {
   /// statuses (e.g. "dead") for readers ahead of that point.
   Future<void> setStatus({
     required int characterId,
-    CharacterStatus? status,
+    required CharacterStatus status,
     int? spoilerBookId,
     int? spoilerChapterIndex,
+    int? spoilerPageInChapter,
   }) async {
     final db = await _db;
     await db.update(
       'characters',
       {
-        'status': status?.name,
+        'status': status.name,
         'status_spoiler_book_id': spoilerBookId,
         'status_spoiler_chapter_index': spoilerChapterIndex,
+        'status_spoiler_page_in_chapter': spoilerPageInChapter,
+      },
+      where: 'id = ?',
+      whereArgs: [characterId],
+    );
+    await _touchCharacter(characterId);
+  }
+
+  /// Per-character status timeline. Ordered by (book, chapter, page)
+  /// so the latest entry the reader has reached is found by linear
+  /// scan from the end. Anchors that share a book ordered by chapter
+  /// then page; entries with a NULL anchor land at the start.
+  Future<List<CharacterStatusEntry>> listStatusEntries(
+    int characterId,
+  ) async {
+    final db = await _db;
+    final rows = await db.query(
+      'character_status_history',
+      where: 'character_id = ?',
+      whereArgs: [characterId],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map(CharacterStatusEntry.fromMap).toList();
+  }
+
+  Future<int> addStatusEntry({
+    required int characterId,
+    required CharacterStatus status,
+    int? customStatusId,
+    int? bookId,
+    int? chapterIndex,
+    int? pageInChapter,
+    String? note,
+  }) async {
+    final db = await _db;
+    final id = await db.insert('character_status_history', {
+      'character_id': characterId,
+      'status': status.name,
+      'custom_status_id': customStatusId,
+      'book_id': bookId,
+      'chapter_index': chapterIndex,
+      'page_in_chapter': pageInChapter,
+      'note': note,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    });
+    await _touchCharacter(characterId);
+    return id;
+  }
+
+  Future<void> deleteStatusEntry(int id) async {
+    final db = await _db;
+    final rows = await db.query(
+      'character_status_history',
+      columns: ['character_id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    await db.delete(
+      'character_status_history',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (rows.isNotEmpty) {
+      await _touchCharacter(rows.first['character_id'] as int);
+    }
+  }
+
+  /// Replaces the character's default narrative status — the value
+  /// shown in the synthetic "first row" of the timeline before any
+  /// recorded change applies. Pass [customStatusId] to point at a
+  /// custom row (the [status] enum then acts as a placeholder for
+  /// the NOT NULL column constraint).
+  Future<void> setDefaultStatus({
+    required int characterId,
+    required CharacterStatus status,
+    int? customStatusId,
+  }) async {
+    final db = await _db;
+    await db.update(
+      'characters',
+      {
+        'status': status.name,
+        'status_custom_id': customStatusId,
+      },
+      where: 'id = ?',
+      whereArgs: [characterId],
+    );
+    await _touchCharacter(characterId);
+  }
+
+  // ---- Custom statuses ----
+
+  Future<List<CustomStatus>> listCustomStatuses() async {
+    final db = await _db;
+    final rows = await db.query(
+      'custom_statuses',
+      orderBy: 'name COLLATE NOCASE ASC',
+    );
+    return rows.map(CustomStatus.fromMap).toList();
+  }
+
+  Future<int> createCustomStatus({
+    required String name,
+    required int colorArgb,
+  }) async {
+    final db = await _db;
+    return db.insert('custom_statuses', {
+      'name': name,
+      'color': colorArgb,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<void> updateCustomStatus({
+    required int id,
+    required String name,
+    required int colorArgb,
+  }) async {
+    final db = await _db;
+    await db.update(
+      'custom_statuses',
+      {'name': name, 'color': colorArgb},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> deleteCustomStatus(int id) async {
+    final db = await _db;
+    await db.delete('custom_statuses', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Records the first appearance of a character. Lists outside the
+  /// reader (or readers ahead of the anchor) see the character as
+  /// "Hidden character" until they reach this position.
+  Future<void> setFirstSeen({
+    required int characterId,
+    int? bookId,
+    int? chapterIndex,
+    int? pageInChapter,
+  }) async {
+    final db = await _db;
+    await db.update(
+      'characters',
+      {
+        'first_seen_book_id': bookId,
+        'first_seen_chapter_index': chapterIndex,
+        'first_seen_page_in_chapter': pageInChapter,
       },
       where: 'id = ?',
       whereArgs: [characterId],
@@ -443,6 +610,7 @@ class CharacterRepository {
     String? note,
     int? spoilerBookId,
     int? spoilerChapterIndex,
+    int? spoilerPageInChapter,
   }) async {
     final db = await _db;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -455,6 +623,7 @@ class CharacterRepository {
         'note': note,
         'spoiler_book_id': spoilerBookId,
         'spoiler_chapter_index': spoilerChapterIndex,
+        'spoiler_page_in_chapter': spoilerPageInChapter,
         'created_at': now,
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
@@ -473,6 +642,7 @@ class CharacterRepository {
           'note': note,
           'spoiler_book_id': spoilerBookId,
           'spoiler_chapter_index': spoilerChapterIndex,
+          'spoiler_page_in_chapter': spoilerPageInChapter,
           'created_at': now,
         },
         conflictAlgorithm: ConflictAlgorithm.ignore,

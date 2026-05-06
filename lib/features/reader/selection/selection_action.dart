@@ -8,6 +8,7 @@ class SelectionContext {
     this.bookId,
     this.bookSeries,
     this.chapterIndex,
+    this.pageInChapter,
     this.charStart,
     this.charEnd,
   });
@@ -21,6 +22,11 @@ class SelectionContext {
 
   /// Chapter the selection lives in (EPUB only).
   final int? chapterIndex;
+
+  /// Page within the chapter the selection lives on. Together with
+  /// [chapterIndex] this gives full page-granularity for the spoiler
+  /// anchor on saved character descriptions / first-seen markers.
+  final int? pageInChapter;
 
   /// Absolute character offsets within the chapter `<body>` of the
   /// selection's start and end. Together with [chapterIndex] these are

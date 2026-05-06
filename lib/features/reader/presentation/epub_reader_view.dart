@@ -14,6 +14,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../characters/presentation/widgets/character_descriptions_sheet.dart';
 import '../../characters/providers/character_provider.dart';
+import '../../characters/services/spoiler_position.dart';
 import '../../book_links/providers/book_link_provider.dart';
 import '../../citations/providers/citation_provider.dart';
 import '../../notes/presentation/widgets/add_note_sheet.dart';
@@ -24,6 +25,7 @@ import '../../dictionary/providers/dictionary_provider.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
 import '../providers/reader_controls_provider.dart';
+import '../providers/reader_position_provider.dart';
 import '../providers/reader_progress_provider.dart';
 import '../providers/reader_settings_provider.dart';
 import '../selection/selection_action.dart';
@@ -1680,6 +1682,7 @@ $body
       bookId: widget.book.id,
       bookSeries: widget.book.series,
       chapterIndex: _chapterIndex,
+      pageInChapter: _pageInChapter,
       charStart: sel.charStart,
       charEnd: sel.charEnd,
     );
@@ -1724,6 +1727,7 @@ $body
       bookSeries: widget.book.series,
       currentBookId: widget.book.id,
       currentChapterIndex: _chapterIndex,
+      currentPageInChapter: _pageInChapter,
     );
     if (!mounted) return;
     await _applyCharacterHighlightsForCurrentChapter();
@@ -1761,6 +1765,19 @@ $body
       label: 'Ch ${_chapterIndex + 1}/${_chapters.length} '
           '· p ${_pageInChapter + 1}/$_pagesInChapter',
     );
+
+    // Publish where the user is so spoiler-aware screens (Characters
+    // list, popups opened from outside the reader) can filter
+    // anchored content against the live position.
+    if (widget.book.id != null && !widget.previewMode) {
+      ref.read(currentReaderPositionProvider.notifier).state = ReaderPosition(
+        bookId: widget.book.id!,
+        chapterIndex: _chapterIndex,
+        pageInChapter: _pageInChapter,
+        series: widget.book.series,
+        seriesNumber: widget.book.seriesNumber,
+      );
+    }
 
     if (widget.previewMode || widget.book.id == null) return;
     _saveDebounce?.cancel();
@@ -1880,6 +1897,9 @@ $body
   void dispose() {
     _saveDebounce?.cancel();
     if (_wakeEnabled) WakelockPlus.disable();
+    // Clear so screens that filter by reader position revert to "no
+    // position" (full visibility) once the user leaves the reader.
+    ref.read(currentReaderPositionProvider.notifier).state = null;
     super.dispose();
   }
 }
