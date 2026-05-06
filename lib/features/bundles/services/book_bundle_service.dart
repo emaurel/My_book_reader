@@ -10,6 +10,8 @@ import '../../../core/database/database_helper.dart';
 import '../../book_links/data/book_link_repository.dart';
 import '../../characters/data/character_repository.dart';
 import '../../characters/domain/affiliation.dart';
+import '../../characters/domain/character.dart';
+import '../../characters/domain/character_relationship.dart';
 import '../../citations/data/citation_repository.dart';
 import '../../dictionary/data/dictionary_repository.dart';
 import '../../dictionary/domain/dictionary.dart';
@@ -182,10 +184,19 @@ class BookBundleService {
         .map((b) => b.series)
         .whereType<String>()
         .toSet();
+    // Custom statuses are exported in full so the import side can
+    // recreate them by name before any character or status entry
+    // tries to reference them. They aren't series-scoped, so we
+    // ship the whole table.
+    final customStatusesJson = await _collectCustomStatusesJson();
+    final affiliationsJson =
+        await _collectAffiliationsJson(seriesSet);
     final charactersJson = await _collectCharactersJson(
       seriesSet,
       localIdByBookId,
     );
+    final relationshipsJson =
+        await _collectRelationshipsJson(seriesSet, localIdByBookId);
 
     onProgress?.call('Collecting dictionaries');
     final dictionariesJson = await _collectDictionariesJson(seriesSet);
@@ -211,7 +222,11 @@ class BookBundleService {
 
     onProgress?.call('Building manifest');
     final manifest = <String, dynamic>{
-      'schema_version': 1,
+      // schema_version 2 adds custom_statuses, affiliations (with
+      // parent hierarchy), relationships, character status timeline /
+      // first-seen / spoiler triples, and description spoiler page.
+      // Older bundles still import — every new field is optional.
+      'schema_version': 2,
       'created_at': DateTime.now().toUtc().toIso8601String(),
       'app_db_version': DatabaseHelper.dbVersion,
       'root_local_id': 0,
@@ -219,7 +234,10 @@ class BookBundleService {
       'books': booksJson,
       'citations': citations,
       'notes': notes,
+      'custom_statuses': customStatusesJson,
+      'affiliations': affiliationsJson,
       'characters': charactersJson,
+      'relationships': relationshipsJson,
       'dictionaries': dictionariesJson,
       'book_links': linksJson,
     };
@@ -416,6 +434,77 @@ class BookBundleService {
       notesAdded++;
     }
 
+    // Custom statuses must land first — characters / status entries
+    // reference them by name and the import resolves to local ids.
+    onProgress?.call('Importing custom statuses');
+    final customStatusIdByName = <String, int>{};
+    {
+      final existing = await _characters.listCustomStatuses();
+      for (final cs in existing) {
+        customStatusIdByName[cs.name.toLowerCase()] = cs.id!;
+      }
+      for (final entry in (manifest['custom_statuses'] as List? ?? const [])
+          .cast<Map<String, dynamic>>()) {
+        final name = entry['name'] as String;
+        if (customStatusIdByName.containsKey(name.toLowerCase())) continue;
+        final id = await _characters.createCustomStatus(
+          name: name,
+          colorArgb: (entry['color'] as num).toInt(),
+        );
+        customStatusIdByName[name.toLowerCase()] = id;
+      }
+    }
+
+    // Affiliations are a tree — create rows first, then set parents
+    // in a second pass so a child can refer to a parent that was
+    // created later in the array.
+    onProgress?.call('Importing affiliations');
+    final affIdByKey = <String, int>{};
+    String affKey(String name, String? series) =>
+        '${name.toLowerCase()}|${(series ?? '').toLowerCase()}';
+    final manifestAffiliations =
+        (manifest['affiliations'] as List? ?? const [])
+            .cast<Map<String, dynamic>>();
+    for (final a in manifestAffiliations) {
+      final name = a['name'] as String;
+      final series = a['series'] as String?;
+      final all = await _characters.listAllAffiliations();
+      final match = all.firstWhere(
+        (existing) =>
+            existing.name.toLowerCase() == name.toLowerCase() &&
+            (existing.series ?? '').toLowerCase() ==
+                (series ?? '').toLowerCase(),
+        orElse: () => Affiliation(
+          id: -1,
+          name: name,
+          series: series,
+          createdAt: DateTime.now(),
+        ),
+      );
+      if (match.id != -1) {
+        affIdByKey[affKey(name, series)] = match.id!;
+      } else {
+        final id = await _characters.createAffiliation(
+          name: name,
+          series: series,
+        );
+        affIdByKey[affKey(name, series)] = id;
+      }
+    }
+    for (final a in manifestAffiliations) {
+      final parentName = a['parent_name'] as String?;
+      if (parentName == null) continue;
+      final parentSeries =
+          (a['parent_series'] as String?) ?? a['series'] as String?;
+      final id = affIdByKey[affKey(a['name'] as String, a['series'] as String?)];
+      final parentId = affIdByKey[affKey(parentName, parentSeries)];
+      if (id == null || parentId == null) continue;
+      await _characters.setAffiliationParent(
+        affiliationId: id,
+        parentId: parentId,
+      );
+    }
+
     onProgress?.call('Importing characters');
     var charactersAdded = 0;
     var descriptionsAdded = 0;
@@ -429,6 +518,43 @@ class BookBundleService {
           await _characters.create(name: name, series: series);
       if (existing == null) charactersAdded++;
 
+      // Default status — only update on first creation so we don't
+      // clobber a value the user already set on the destination
+      // device. New bundles carry both a built-in name and an
+      // optional custom-status name; older bundles supply neither.
+      if (existing == null) {
+        final defaultStatusName = c['default_status'] as String?;
+        final builtIn = CharacterStatus.fromName(defaultStatusName) ??
+            CharacterStatus.alive;
+        final defaultCustomName =
+            c['default_custom_status_name'] as String?;
+        final customId = defaultCustomName != null
+            ? customStatusIdByName[defaultCustomName.toLowerCase()]
+            : null;
+        if (defaultStatusName != null || customId != null) {
+          await _characters.setDefaultStatus(
+            characterId: characterId,
+            status: builtIn,
+            customStatusId: customId,
+          );
+        }
+        // First-seen anchor.
+        final fsLocal = (c['first_seen_book_local_id'] as num?)?.toInt();
+        final fsBookId =
+            fsLocal != null ? localIdToDbId[fsLocal] : null;
+        final fsChapter = (c['first_seen_chapter_index'] as num?)?.toInt();
+        final fsPage =
+            (c['first_seen_page_in_chapter'] as num?)?.toInt();
+        if (fsBookId != null || fsChapter != null || fsPage != null) {
+          await _characters.setFirstSeen(
+            characterId: characterId,
+            bookId: fsBookId,
+            chapterIndex: fsChapter,
+            pageInChapter: fsPage,
+          );
+        }
+      }
+
       for (final alias in (c['aliases'] as List? ?? const [])
           .whereType<String>()) {
         try {
@@ -440,30 +566,28 @@ class BookBundleService {
       }
       for (final affName in (c['affiliations'] as List? ?? const [])
           .whereType<String>()) {
-        final all = await _characters.listAffiliationsForSeries(series);
-        var aff = all.firstWhere(
-          (a) => a.name.toLowerCase() == affName.toLowerCase(),
-          orElse: () => Affiliation(
-            id: -1,
-            name: affName,
-            series: series,
-            createdAt: DateTime.now(),
-          ),
-        );
-        if (aff.id == -1) {
-          final id =
-              await _characters.createAffiliation(name: affName, series: series);
-          aff = Affiliation(
-            id: id,
-            name: affName,
-            series: series,
-            createdAt: DateTime.now(),
-          );
+        // Prefer the id from the top-level affiliations pass; fall
+        // back to lookup-or-create for older bundles that didn't
+        // include the affiliations array.
+        var affId = affIdByKey[affKey(affName, series)] ??
+            affIdByKey[affKey(affName, null)];
+        if (affId == null) {
+          final all = await _characters.listAffiliationsForSeries(series);
+          final match = all
+              .where((a) => a.name.toLowerCase() == affName.toLowerCase())
+              .cast<Affiliation?>()
+              .firstWhere((_) => true, orElse: () => null);
+          affId = match?.id ??
+              await _characters.createAffiliation(
+                name: affName,
+                series: series,
+              );
+          affIdByKey[affKey(affName, series)] = affId;
         }
         try {
           await _characters.linkAffiliation(
             characterId: characterId,
-            affiliationId: aff.id!,
+            affiliationId: affId,
           );
         } catch (_) {/* already linked */}
       }
@@ -475,12 +599,96 @@ class BookBundleService {
         final existingDescs =
             await _characters.descriptionsForCharacter(characterId);
         if (existingDescs.any((ed) => ed.text == d['text'])) continue;
+        final spoilerBookLocal =
+            (d['spoiler_book_local_id'] as num?)?.toInt();
+        final spoilerBookId = spoilerBookLocal != null
+            ? localIdToDbId[spoilerBookLocal]
+            : null;
         await _characters.addDescription(
           characterId: characterId,
           text: d['text'] as String,
           bookId: descBookId,
+          spoilerBookId: spoilerBookId,
+          spoilerChapterIndex:
+              (d['spoiler_chapter_index'] as num?)?.toInt(),
+          spoilerPageInChapter:
+              (d['spoiler_page_in_chapter'] as num?)?.toInt(),
         );
         descriptionsAdded++;
+      }
+
+      // Status timeline — only seeded on first import to avoid
+      // duplicating entries when the user re-imports an updated
+      // bundle. A simple created_at de-dupe inside listStatusEntries
+      // would be more permissive but harder to reason about.
+      if (existing == null) {
+        for (final entry in (c['status_history'] as List? ?? const [])
+            .cast<Map<String, dynamic>>()) {
+          final builtIn =
+              CharacterStatus.fromName(entry['status'] as String?) ??
+                  CharacterStatus.alive;
+          final customName = entry['custom_status_name'] as String?;
+          final customId = customName != null
+              ? customStatusIdByName[customName.toLowerCase()]
+              : null;
+          final entryBookLocal =
+              (entry['book_local_id'] as num?)?.toInt();
+          final entryBookId = entryBookLocal != null
+              ? localIdToDbId[entryBookLocal]
+              : null;
+          await _characters.addStatusEntry(
+            characterId: characterId,
+            status: builtIn,
+            customStatusId: customId,
+            bookId: entryBookId,
+            chapterIndex: (entry['chapter_index'] as num?)?.toInt(),
+            pageInChapter: (entry['page_in_chapter'] as num?)?.toInt(),
+            note: entry['note'] as String?,
+          );
+        }
+      }
+    }
+
+    // Relationships go after every character row exists so both
+    // endpoints resolve. Bundle stores the forward edge only — the
+    // repo writes the symmetric inverse automatically.
+    onProgress?.call('Importing relationships');
+    {
+      final allChars = await _characters.listAll();
+      final byKey = <String, int>{
+        for (final ch in allChars)
+          '${ch.name.toLowerCase()}|${(ch.series ?? '').toLowerCase()}':
+              ch.id!,
+      };
+      String charKey(String name, String? series) =>
+          '${name.toLowerCase()}|${(series ?? '').toLowerCase()}';
+      for (final r in (manifest['relationships'] as List? ?? const [])
+          .cast<Map<String, dynamic>>()) {
+        final fromId = byKey[charKey(
+          r['from_name'] as String,
+          r['from_series'] as String?,
+        )];
+        final toId = byKey[charKey(
+          r['to_name'] as String,
+          r['to_series'] as String?,
+        )];
+        if (fromId == null || toId == null) continue;
+        final spoilerBookLocal =
+            (r['spoiler_book_local_id'] as num?)?.toInt();
+        final spoilerBookId = spoilerBookLocal != null
+            ? localIdToDbId[spoilerBookLocal]
+            : null;
+        await _characters.addRelationship(
+          fromCharacterId: fromId,
+          toCharacterId: toId,
+          kind: RelationshipKind.fromName(r['kind'] as String),
+          note: r['note'] as String?,
+          spoilerBookId: spoilerBookId,
+          spoilerChapterIndex:
+              (r['spoiler_chapter_index'] as num?)?.toInt(),
+          spoilerPageInChapter:
+              (r['spoiler_page_in_chapter'] as num?)?.toInt(),
+        );
       }
     }
 
@@ -627,6 +835,13 @@ class BookBundleService {
     Set<String> seriesSet,
     Map<int, int> localIdByBookId,
   ) async {
+    // Custom statuses are referenced from characters and history rows
+    // by id; the bundle stores them by *name* so the import side can
+    // remap to whatever id the destination DB ends up with.
+    final customs = await _characters.listCustomStatuses();
+    final customNameById = {
+      for (final cs in customs) cs.id!: cs.name,
+    };
     final result = <Map<String, dynamic>>[];
     final all = await _characters.listAll();
     for (final c in all) {
@@ -636,11 +851,22 @@ class BookBundleService {
           await _characters.affiliationsForCharacter(c.id!);
       final descriptions =
           await _characters.descriptionsForCharacter(c.id!);
+      final statusEntries = await _characters.listStatusEntries(c.id!);
       result.add({
         'name': c.name,
         'series': c.series,
         'created_at': c.createdAt.millisecondsSinceEpoch,
         'updated_at': c.updatedAt.millisecondsSinceEpoch,
+        // Default status — both built-in name and (optional) custom
+        // status by name. The import side picks whichever is set.
+        'default_status': c.status.name,
+        'default_custom_status_name':
+            c.statusCustomId != null ? customNameById[c.statusCustomId] : null,
+        'first_seen_book_local_id': c.firstSeenBookId != null
+            ? localIdByBookId[c.firstSeenBookId!]
+            : null,
+        'first_seen_chapter_index': c.firstSeenChapterIndex,
+        'first_seen_page_in_chapter': c.firstSeenPageInChapter,
         'aliases': aliases,
         'affiliations': affiliations.map((a) => a.name).toList(),
         'descriptions': descriptions
@@ -648,12 +874,131 @@ class BookBundleService {
                   'text': d.text,
                   'book_local_id':
                       d.bookId != null ? localIdByBookId[d.bookId!] : null,
+                  'spoiler_book_local_id': d.spoilerBookId != null
+                      ? localIdByBookId[d.spoilerBookId!]
+                      : null,
+                  'spoiler_chapter_index': d.spoilerChapterIndex,
+                  'spoiler_page_in_chapter': d.spoilerPageInChapter,
                   'created_at': d.createdAt.millisecondsSinceEpoch,
+                })
+            .toList(),
+        'status_history': statusEntries
+            .map((e) => {
+                  'status': e.status.name,
+                  'custom_status_name': e.customStatusId != null
+                      ? customNameById[e.customStatusId]
+                      : null,
+                  'book_local_id': e.bookId != null
+                      ? localIdByBookId[e.bookId!]
+                      : null,
+                  'chapter_index': e.chapterIndex,
+                  'page_in_chapter': e.pageInChapter,
+                  'note': e.note,
+                  'created_at': e.createdAt.millisecondsSinceEpoch,
                 })
             .toList(),
       });
     }
     return result;
+  }
+
+  /// Custom statuses are global (not series-scoped) so we export the
+  /// whole table — the import side de-dupes by name.
+  Future<List<Map<String, dynamic>>> _collectCustomStatusesJson() async {
+    final all = await _characters.listCustomStatuses();
+    return all
+        .map((c) => {
+              'name': c.name,
+              'color': c.colorArgb,
+              'created_at': c.createdAt.millisecondsSinceEpoch,
+            })
+        .toList();
+  }
+
+  /// Affiliations belonging to any of [seriesSet] plus globals (so the
+  /// hierarchy round-trips even when a sub-faction sits under a global
+  /// parent). Stored by name + parent_name so the import side can
+  /// rebuild the tree without depending on local DB ids.
+  Future<List<Map<String, dynamic>>> _collectAffiliationsJson(
+    Set<String> seriesSet,
+  ) async {
+    final all = await _characters.listAllAffiliations();
+    final byId = {for (final a in all) a.id!: a};
+    final scoped = all
+        .where((a) => a.series == null || seriesSet.contains(a.series))
+        .toList();
+    return scoped
+        .map((a) => {
+              'name': a.name,
+              'series': a.series,
+              'parent_name': a.parentId != null
+                  ? byId[a.parentId]?.name
+                  : null,
+              'parent_series': a.parentId != null
+                  ? byId[a.parentId]?.series
+                  : null,
+              'created_at': a.createdAt.millisecondsSinceEpoch,
+            })
+        .toList();
+  }
+
+  /// Outgoing relationships between two in-scope characters. Stored
+  /// by character (name, series) since DB ids don't translate. Only
+  /// the forward edge of each pair is exported — the repo's
+  /// `addRelationship` recreates the symmetric inverse on import.
+  Future<List<Map<String, dynamic>>> _collectRelationshipsJson(
+    Set<String> seriesSet,
+    Map<int, int> localIdByBookId,
+  ) async {
+    final all = await _characters.allRelationships();
+    final allChars = await _characters.listAll();
+    final charsById = {for (final c in allChars) c.id!: c};
+    final result = <Map<String, dynamic>>[];
+    final emitted = <String>{}; // de-dupe symmetric inverses
+    for (final r in all) {
+      final from = charsById[r.fromCharacterId];
+      final to = charsById[r.toCharacterId];
+      if (from == null || to == null) continue;
+      // Only carry edges that involve at least one in-scope series.
+      final inScope = (from.series != null && seriesSet.contains(from.series)) ||
+          (to.series != null && seriesSet.contains(to.series));
+      if (!inScope) continue;
+      // Drop the inverse edge — addRelationship recreates it.
+      final pairKey = _relationshipPairKey(r, from, to);
+      if (emitted.contains(pairKey)) continue;
+      emitted.add(pairKey);
+      result.add({
+        'from_name': from.name,
+        'from_series': from.series,
+        'to_name': to.name,
+        'to_series': to.series,
+        'kind': r.kind.name,
+        'note': r.note,
+        'spoiler_book_local_id': r.spoilerBookId != null
+            ? localIdByBookId[r.spoilerBookId!]
+            : null,
+        'spoiler_chapter_index': r.spoilerChapterIndex,
+        'spoiler_page_in_chapter': r.spoilerPageInChapter,
+        'created_at': r.createdAt.millisecondsSinceEpoch,
+      });
+    }
+    return result;
+  }
+
+  /// Stable key for a relationship pair so we don't emit both sides of
+  /// an automatic-inverse pair (e.g. parent ↔ child). Uses the kind
+  /// plus a sorted endpoint pair so the inverse edge produces the
+  /// same key.
+  String _relationshipPairKey(
+    CharacterRelationship r,
+    Character from,
+    Character to,
+  ) {
+    final aKey = '${from.name}|${from.series ?? ''}';
+    final bKey = '${to.name}|${to.series ?? ''}';
+    final endpoints = [aKey, bKey]..sort();
+    final kindKey = [r.kind.name, r.kind.inverse.name]..sort();
+    return '${kindKey.join('/')}::${endpoints.join('::')}';
   }
 
   Future<List<Map<String, dynamic>>> _collectDictionariesJson(
