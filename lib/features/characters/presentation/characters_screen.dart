@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/layout/safe_bottom.dart';
 import '../../../shared/navigation/main_drawer.dart';
 import '../../library/domain/book.dart';
 import '../../library/providers/library_provider.dart';
@@ -99,7 +100,8 @@ class CharactersScreen extends ConsumerWidget {
             });
           final theme = Theme.of(context);
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24)
+                .clearBottomInset(context, extra: 80),
             children: [
               for (final series in keys)
                 Theme(

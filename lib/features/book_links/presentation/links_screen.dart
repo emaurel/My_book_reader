@@ -43,7 +43,12 @@ class LinksScreen extends ConsumerWidget {
               data: (items) {
                 if (items.isEmpty) return const _EmptyState();
                 return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    12,
+                    16,
+                    MediaQuery.viewPaddingOf(context).bottom + 24,
+                  ),
                   itemCount: items.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (_, i) => _LinkCard(link: items[i]),

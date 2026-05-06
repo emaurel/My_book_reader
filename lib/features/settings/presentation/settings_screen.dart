@@ -23,6 +23,9 @@ class SettingsScreen extends ConsumerWidget {
       drawer: const MainDrawer(currentRoute: '/settings'),
       appBar: AppBar(title: Text(l.navSettings)),
       body: ListView(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewPaddingOf(context).bottom + 24,
+        ),
         children: [
           _SectionHeader(l.settingsLibrary),
           SwitchListTile(

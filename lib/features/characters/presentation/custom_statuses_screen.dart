@@ -64,7 +64,12 @@ class CustomStatusesScreen extends ConsumerWidget {
             );
           }
           return ListView.separated(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: EdgeInsets.fromLTRB(
+              0,
+              12,
+              0,
+              MediaQuery.viewPaddingOf(context).bottom + 24,
+            ),
             itemCount: list.length,
             separatorBuilder: (_, __) => const SizedBox(height: 4),
             itemBuilder: (_, i) => _Row(status: list[i]),

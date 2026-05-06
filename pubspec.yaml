@@ -1,7 +1,7 @@
 name: book_reader
 description: A clean, minimal book reader for Android.
 publish_to: 'none'
-version: 0.8.2+15
+version: 0.8.3+16
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

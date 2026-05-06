@@ -87,7 +87,12 @@ class CurrentReadingsScreen extends ConsumerWidget {
         data: (list) {
           if (list.isEmpty) return const _EmptyState();
           return GridView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+            padding: EdgeInsets.fromLTRB(
+              12,
+              12,
+              12,
+              MediaQuery.viewPaddingOf(context).bottom + 24,
+            ),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 160,
               childAspectRatio: 0.55,

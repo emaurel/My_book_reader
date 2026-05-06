@@ -39,7 +39,9 @@ class SelectionMenuSettingsScreen extends ConsumerWidget {
           ),
           Expanded(
             child: ReorderableListView(
-              padding: const EdgeInsets.only(bottom: 24),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 24,
+              ),
               onReorder: (oldIndex, newIndex) {
                 if (newIndex > oldIndex) newIndex--;
                 final reordered = [

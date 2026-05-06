@@ -335,7 +335,12 @@ class _SeriesGroupedLibrary extends StatelessWidget {
       });
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
+      padding: EdgeInsets.fromLTRB(
+        12,
+        4,
+        12,
+        MediaQuery.viewPaddingOf(context).bottom + 96,
+      ),
       children: [
         for (final series in keys)
           Theme(
