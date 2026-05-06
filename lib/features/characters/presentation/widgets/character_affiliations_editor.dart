@@ -117,11 +117,14 @@ class _CharacterAffiliationsEditorState
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               for (final a in linked)
-                InputChip(
-                  label: Text(a.name),
-                  onDeleted: () => _unlink(a),
-                  deleteIconColor:
-                      theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                GestureDetector(
+                  onLongPress: () => _editAffiliationParent(a),
+                  child: InputChip(
+                    label: _AffiliationLabel(affiliation: a),
+                    onDeleted: () => _unlink(a),
+                    deleteIconColor:
+                        theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
               if (_adding)
                 ..._addControls(linked, available)
@@ -177,6 +180,72 @@ class _CharacterAffiliationsEditorState
     return showDialog<String>(
       context: context,
       builder: (_) => const _NewAffiliationDialog(),
+    );
+  }
+
+  /// Long-press on an affiliation chip → pick a parent. Lets users
+  /// model nested factions like "OPA ⟶ Belt" without leaving the
+  /// character sheet.
+  Future<void> _editAffiliationParent(Affiliation child) async {
+    if (child.id == null) return;
+    final repo = ref.read(characterRepositoryProvider);
+    final all =
+        await repo.listAffiliationsForSeries(widget.character.series);
+    if (!mounted) return;
+    final candidates = all.where((a) => a.id != child.id).toList();
+    final picked = await showDialog<int?>(
+      context: context,
+      builder: (dCtx) => SimpleDialog(
+        title: Text('Parent of "${child.name}"'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dCtx, _NoneSentinel.id),
+            child: const Text('No parent (top-level)'),
+          ),
+          for (final a in candidates)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dCtx, a.id),
+              child: Text(a.name),
+            ),
+        ],
+      ),
+    );
+    if (picked == null) return;
+    final parentId = picked == _NoneSentinel.id ? null : picked;
+    await repo.setAffiliationParent(
+      affiliationId: child.id!,
+      parentId: parentId,
+    );
+    ref.read(characterRevisionProvider.notifier).state++;
+  }
+}
+
+class _NoneSentinel {
+  static const int id = -1;
+}
+
+class _AffiliationLabel extends ConsumerWidget {
+  const _AffiliationLabel({required this.affiliation});
+  final Affiliation affiliation;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (affiliation.parentId == null) return Text(affiliation.name);
+    final asyncAll =
+        ref.watch(affiliationsForSeriesProvider(affiliation.series));
+    return asyncAll.when(
+      loading: () => Text(affiliation.name),
+      error: (_, __) => Text(affiliation.name),
+      data: (all) {
+        final parent = all.firstWhere(
+          (a) => a.id == affiliation.parentId,
+          orElse: () => Affiliation(
+            name: '?',
+            createdAt: DateTime.now(),
+          ),
+        );
+        return Text('${parent.name} → ${affiliation.name}');
+      },
     );
   }
 }

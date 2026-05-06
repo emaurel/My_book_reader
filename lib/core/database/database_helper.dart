@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'book_reader.db';
-  static const _dbVersion = 16;
+  static const _dbVersion = 17;
 
   /// Exposed for the backup service so it can reject backups taken on
   /// future app versions whose DB schema we don't yet understand.
@@ -176,7 +176,11 @@ class DatabaseHelper {
         series TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER,
-        UNIQUE(name, series)
+        status TEXT,
+        status_spoiler_book_id INTEGER,
+        status_spoiler_chapter_index INTEGER,
+        UNIQUE(name, series),
+        FOREIGN KEY (status_spoiler_book_id) REFERENCES books(id) ON DELETE SET NULL
       )
     ''');
     await db.execute('''
@@ -207,6 +211,34 @@ class DatabaseHelper {
     );
     await _createCharacterAliasesTable(db);
     await _createAffiliationTables(db);
+    await _createCharacterRelationshipsTable(db);
+  }
+
+  Future<void> _createCharacterRelationshipsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS character_relationships (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        from_character_id INTEGER NOT NULL,
+        to_character_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        note TEXT,
+        spoiler_book_id INTEGER,
+        spoiler_chapter_index INTEGER,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (from_character_id) REFERENCES characters(id) ON DELETE CASCADE,
+        FOREIGN KEY (to_character_id) REFERENCES characters(id) ON DELETE CASCADE,
+        FOREIGN KEY (spoiler_book_id) REFERENCES books(id) ON DELETE SET NULL,
+        UNIQUE(from_character_id, to_character_id, kind)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_char_rels_from '
+      'ON character_relationships(from_character_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_char_rels_to '
+      'ON character_relationships(to_character_id)',
+    );
   }
 
   Future<void> _createAffiliationTables(Database db) async {
@@ -215,8 +247,10 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         series TEXT,
+        parent_id INTEGER,
         created_at INTEGER NOT NULL,
-        UNIQUE(name, series)
+        UNIQUE(name, series),
+        FOREIGN KEY (parent_id) REFERENCES affiliations(id) ON DELETE SET NULL
       )
     ''');
     await db.execute('''
@@ -378,6 +412,17 @@ class DatabaseHelper {
       await tryExec(
         'ALTER TABLE character_descriptions ADD COLUMN spoiler_chapter_index INTEGER',
       );
+    }
+    if (oldVersion < 17) {
+      await tryExec('ALTER TABLE characters ADD COLUMN status TEXT');
+      await tryExec(
+        'ALTER TABLE characters ADD COLUMN status_spoiler_book_id INTEGER',
+      );
+      await tryExec(
+        'ALTER TABLE characters ADD COLUMN status_spoiler_chapter_index INTEGER',
+      );
+      await tryExec('ALTER TABLE affiliations ADD COLUMN parent_id INTEGER');
+      await _createCharacterRelationshipsTable(db);
     }
   }
 }

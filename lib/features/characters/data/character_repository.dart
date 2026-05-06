@@ -4,6 +4,7 @@ import '../../../core/database/database_helper.dart';
 import '../domain/affiliation.dart';
 import '../domain/character.dart';
 import '../domain/character_description.dart';
+import '../domain/character_relationship.dart';
 
 class CharacterRepository {
   Future<Database> get _db async => DatabaseHelper.instance.database;
@@ -277,6 +278,7 @@ class CharacterRepository {
   Future<int> createAffiliation({
     required String name,
     String? series,
+    int? parentId,
   }) async {
     final db = await _db;
     return db.insert(
@@ -284,6 +286,7 @@ class CharacterRepository {
       {
         'name': name,
         'series': series,
+        'parent_id': parentId,
         'created_at': DateTime.now().millisecondsSinceEpoch,
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
@@ -293,6 +296,21 @@ class CharacterRepository {
   Future<void> deleteAffiliation(int id) async {
     final db = await _db;
     await db.delete('affiliations', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Reparent an affiliation. Used by the Characters screen's
+  /// affiliation-tree editor.
+  Future<void> setAffiliationParent({
+    required int affiliationId,
+    int? parentId,
+  }) async {
+    final db = await _db;
+    await db.update(
+      'affiliations',
+      {'parent_id': parentId},
+      where: 'id = ?',
+      whereArgs: [affiliationId],
+    );
   }
 
   Future<List<Affiliation>> affiliationsForCharacter(int characterId) async {
@@ -389,5 +407,133 @@ class CharacterRepository {
     }
     if (rows.isEmpty) return null;
     return Character.fromMap(rows.first);
+  }
+
+  // ---- Status ----
+
+  /// Update the narrative status of a character. Pass null to clear.
+  /// The spoiler-anchor pair lets the in-reader popup hide spoiler
+  /// statuses (e.g. "dead") for readers ahead of that point.
+  Future<void> setStatus({
+    required int characterId,
+    CharacterStatus? status,
+    int? spoilerBookId,
+    int? spoilerChapterIndex,
+  }) async {
+    final db = await _db;
+    await db.update(
+      'characters',
+      {
+        'status': status?.name,
+        'status_spoiler_book_id': spoilerBookId,
+        'status_spoiler_chapter_index': spoilerChapterIndex,
+      },
+      where: 'id = ?',
+      whereArgs: [characterId],
+    );
+    await _touchCharacter(characterId);
+  }
+
+  // ---- Relationships ----
+
+  Future<int> addRelationship({
+    required int fromCharacterId,
+    required int toCharacterId,
+    required RelationshipKind kind,
+    String? note,
+    int? spoilerBookId,
+    int? spoilerChapterIndex,
+  }) async {
+    final db = await _db;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final id = await db.insert(
+      'character_relationships',
+      {
+        'from_character_id': fromCharacterId,
+        'to_character_id': toCharacterId,
+        'kind': kind.name,
+        'note': note,
+        'spoiler_book_id': spoilerBookId,
+        'spoiler_chapter_index': spoilerChapterIndex,
+        'created_at': now,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+    // Auto-add the inverse so the graph is consistent without the
+    // user having to enter the same relation from the other side.
+    final inverse = kind.inverse;
+    final alreadySymmetric = inverse == kind;
+    if (!alreadySymmetric || fromCharacterId != toCharacterId) {
+      await db.insert(
+        'character_relationships',
+        {
+          'from_character_id': toCharacterId,
+          'to_character_id': fromCharacterId,
+          'kind': inverse.name,
+          'note': note,
+          'spoiler_book_id': spoilerBookId,
+          'spoiler_chapter_index': spoilerChapterIndex,
+          'created_at': now,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+    await _touchCharacter(fromCharacterId);
+    await _touchCharacter(toCharacterId);
+    return id;
+  }
+
+  Future<void> deleteRelationship(int id) async {
+    final db = await _db;
+    // Look up the row first so we can also remove its inverse pair.
+    final rows = await db.query(
+      'character_relationships',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return;
+    final r = CharacterRelationship.fromMap(rows.first);
+    await db.delete(
+      'character_relationships',
+      where: '(from_character_id = ? AND to_character_id = ? AND kind = ?) '
+          'OR (from_character_id = ? AND to_character_id = ? AND kind = ?)',
+      whereArgs: [
+        r.fromCharacterId,
+        r.toCharacterId,
+        r.kind.name,
+        r.toCharacterId,
+        r.fromCharacterId,
+        r.kind.inverse.name,
+      ],
+    );
+    await _touchCharacter(r.fromCharacterId);
+    await _touchCharacter(r.toCharacterId);
+  }
+
+  /// Outgoing relationships from a character. Used by the character
+  /// sheet's relationships section.
+  Future<List<CharacterRelationship>> relationshipsFrom(
+    int characterId,
+  ) async {
+    final db = await _db;
+    final rows = await db.query(
+      'character_relationships',
+      where: 'from_character_id = ?',
+      whereArgs: [characterId],
+      orderBy: 'created_at ASC',
+    );
+    return rows.map(CharacterRelationship.fromMap).toList();
+  }
+
+  /// Every relationship in the database — used by the global graph
+  /// view to render the entire web of character connections.
+  Future<List<CharacterRelationship>> allRelationships() async {
+    final db = await _db;
+    final rows = await db.query(
+      'character_relationships',
+      orderBy: 'created_at ASC',
+    );
+    return rows.map(CharacterRelationship.fromMap).toList();
   }
 }

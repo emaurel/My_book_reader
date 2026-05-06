@@ -4,6 +4,7 @@ import '../data/character_repository.dart';
 import '../domain/affiliation.dart';
 import '../domain/character.dart';
 import '../domain/character_description.dart';
+import '../domain/character_relationship.dart';
 
 final characterRepositoryProvider =
     Provider<CharacterRepository>((_) => CharacterRepository());
@@ -93,4 +94,28 @@ final affiliationsByCharacterForSeriesProvider = FutureProvider.family<
   return ref
       .watch(characterRepositoryProvider)
       .affiliationsByCharacter(series);
+});
+
+/// Outgoing relationships for a single character — used by the
+/// character sheet's relationships section.
+final relationshipsForCharacterProvider =
+    FutureProvider.family<List<CharacterRelationship>, int>(
+  (ref, characterId) {
+    ref.watch(characterRevisionProvider);
+    return ref
+        .watch(characterRepositoryProvider)
+        .relationshipsFrom(characterId);
+  },
+);
+
+/// Look up a character by id without scanning the full list at the
+/// call site. Cached and refreshed by the revision counter.
+final characterByIdProvider =
+    FutureProvider.family<Character?, int>((ref, id) async {
+  ref.watch(characterRevisionProvider);
+  final all = await ref.watch(characterRepositoryProvider).listAll();
+  for (final c in all) {
+    if (c.id == id) return c;
+  }
+  return null;
 });

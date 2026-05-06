@@ -6,10 +6,14 @@ import '../../../shared/navigation/main_drawer.dart';
 import '../domain/affiliation.dart';
 import '../domain/character.dart';
 import '../providers/character_provider.dart';
+import 'character_relationships_graph_screen.dart';
 import 'character_timeline_screen.dart';
 import 'widgets/character_affiliations_editor.dart';
 import 'widgets/character_alias_editor.dart';
 import 'widgets/character_description_card.dart';
+import 'widgets/character_relationships_editor.dart';
+import 'widgets/character_status_editor.dart';
+import 'widgets/character_status_indicator.dart';
 
 class CharactersScreen extends ConsumerWidget {
   const CharactersScreen({super.key});
@@ -20,7 +24,20 @@ class CharactersScreen extends ConsumerWidget {
     final l = AppLocalizations.of(context);
     return Scaffold(
       drawer: const MainDrawer(currentRoute: '/characters'),
-      appBar: AppBar(title: Text(l.navCharacters)),
+      appBar: AppBar(
+        title: Text(l.navCharacters),
+        actions: [
+          IconButton(
+            tooltip: 'Relationship graph',
+            icon: const Icon(Icons.account_tree_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const CharacterRelationshipsGraphScreen(),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: chars.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
@@ -225,6 +242,8 @@ class _CharacterCard extends ConsumerWidget {
         ),
         title: Row(
           children: [
+            CharacterStatusDot(status: character.status, size: 10),
+            if (character.status != null) const SizedBox(width: 6),
             Flexible(
               child: Text(
                 character.name,
@@ -282,9 +301,13 @@ class _CharacterCard extends ConsumerWidget {
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
+          CharacterStatusEditor(character: character),
+          const Divider(),
           CharacterAliasEditor(character: character),
           const SizedBox(height: 12),
           CharacterAffiliationsEditor(character: character),
+          const SizedBox(height: 16),
+          CharacterRelationshipsEditor(character: character),
           const SizedBox(height: 16),
           descs.when(
             loading: () => const Padding(
