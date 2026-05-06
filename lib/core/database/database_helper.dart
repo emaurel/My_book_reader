@@ -7,7 +7,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'book_reader.db';
-  static const _dbVersion = 21;
+  static const _dbVersion = 22;
 
   /// Exposed for the backup service so it can reject backups taken on
   /// future app versions whose DB schema we don't yet understand.
@@ -258,13 +258,19 @@ class DatabaseHelper {
   /// User-defined status values (name + ARGB color) shown alongside
   /// the four built-ins (alive/dead/missing/unknown). Built-ins live
   /// in code; this table only stores rows the user creates manually.
+  /// Optional [series] scopes a custom status to one series — when
+  /// null the status is global and every character can see it. The
+  /// UNIQUE constraint includes series so the same name can exist
+  /// once globally and once per series.
   Future<void> _createCustomStatusesTable(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS custom_statuses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        series TEXT,
         color INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        UNIQUE(name, series)
       )
     ''');
   }
@@ -539,6 +545,22 @@ class DatabaseHelper {
       await tryExec(
         'ALTER TABLE character_status_history ADD COLUMN custom_status_id INTEGER',
       );
+    }
+    if (oldVersion < 22) {
+      // Add optional series column to custom_statuses + change the
+      // UNIQUE constraint to (name, series). SQLite can't drop
+      // constraints in place, so we rebuild the table — ids are
+      // preserved so existing FK pointers from characters /
+      // character_status_history keep resolving.
+      await tryExec(
+        'ALTER TABLE custom_statuses RENAME TO custom_statuses_v21',
+      );
+      await _createCustomStatusesTable(db);
+      await tryExec(
+        'INSERT INTO custom_statuses (id, name, color, created_at) '
+        'SELECT id, name, color, created_at FROM custom_statuses_v21',
+      );
+      await tryExec('DROP TABLE custom_statuses_v21');
     }
   }
 }

@@ -81,6 +81,7 @@ class _Row extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     return ListTile(
       leading: Container(
         width: 24,
@@ -91,6 +92,14 @@ class _Row extends ConsumerWidget {
         ),
       ),
       title: Text(status.name),
+      subtitle: Text(
+        status.series == null ? 'Global' : 'Series: ${status.series}',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontStyle:
+              status.series == null ? FontStyle.italic : FontStyle.normal,
+        ),
+      ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -114,12 +123,14 @@ class _Row extends ConsumerWidget {
       context,
       initialName: status.name,
       initialColorArgb: status.colorArgb,
+      initialSeries: status.series,
     );
     if (picked == null || status.id == null) return;
     await ref.read(characterRepositoryProvider).updateCustomStatus(
           id: status.id!,
           name: picked.name,
           colorArgb: picked.colorArgb,
+          series: picked.series,
         );
     ref.read(characterRevisionProvider.notifier).state++;
   }

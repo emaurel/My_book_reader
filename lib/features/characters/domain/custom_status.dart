@@ -4,22 +4,29 @@
 /// "alive/dead/missing" axis isn't enough (e.g. "Imprisoned",
 /// "Possessed", "Cursed"). The color is stored as packed ARGB to
 /// match Flutter's `Color.value`.
+///
+/// [series] optionally scopes the status to one book series; null
+/// means global. The status picker for a series-scoped character
+/// shows globals plus matching-series customs.
 class CustomStatus {
   CustomStatus({
     this.id,
     required this.name,
+    this.series,
     required this.colorArgb,
     required this.createdAt,
   });
 
   final int? id;
   final String name;
+  final String? series;
   final int colorArgb;
   final DateTime createdAt;
 
   Map<String, dynamic> toMap() => {
         if (id != null) 'id': id,
         'name': name,
+        'series': series,
         'color': colorArgb,
         'created_at': createdAt.millisecondsSinceEpoch,
       };
@@ -27,6 +34,7 @@ class CustomStatus {
   factory CustomStatus.fromMap(Map<String, dynamic> m) => CustomStatus(
         id: m['id'] as int?,
         name: m['name'] as String,
+        series: m['series'] as String?,
         colorArgb: m['color'] as int,
         createdAt:
             DateTime.fromMillisecondsSinceEpoch(m['created_at'] as int),

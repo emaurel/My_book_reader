@@ -542,18 +542,45 @@ class CharacterRepository {
     final db = await _db;
     final rows = await db.query(
       'custom_statuses',
-      orderBy: 'name COLLATE NOCASE ASC',
+      orderBy: 'series COLLATE NOCASE ASC, name COLLATE NOCASE ASC',
     );
+    return rows.map(CustomStatus.fromMap).toList();
+  }
+
+  /// Custom statuses available to a character in [series]: globals
+  /// (`series IS NULL`) plus any whose series matches. Used by the
+  /// status picker inside the editor.
+  Future<List<CustomStatus>> listCustomStatusesForScope(
+    String? series,
+  ) async {
+    final db = await _db;
+    final List<Map<String, Object?>> rows;
+    if (series == null) {
+      rows = await db.query(
+        'custom_statuses',
+        where: 'series IS NULL',
+        orderBy: 'name COLLATE NOCASE ASC',
+      );
+    } else {
+      rows = await db.query(
+        'custom_statuses',
+        where: 'series IS NULL OR series = ?',
+        whereArgs: [series],
+        orderBy: 'series COLLATE NOCASE ASC, name COLLATE NOCASE ASC',
+      );
+    }
     return rows.map(CustomStatus.fromMap).toList();
   }
 
   Future<int> createCustomStatus({
     required String name,
     required int colorArgb,
+    String? series,
   }) async {
     final db = await _db;
     return db.insert('custom_statuses', {
       'name': name,
+      'series': series,
       'color': colorArgb,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
@@ -563,11 +590,12 @@ class CharacterRepository {
     required int id,
     required String name,
     required int colorArgb,
+    String? series,
   }) async {
     final db = await _db;
     await db.update(
       'custom_statuses',
-      {'name': name, 'color': colorArgb},
+      {'name': name, 'series': series, 'color': colorArgb},
       where: 'id = ?',
       whereArgs: [id],
     );

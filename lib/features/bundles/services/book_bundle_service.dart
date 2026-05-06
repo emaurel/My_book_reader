@@ -436,23 +436,41 @@ class BookBundleService {
 
     // Custom statuses must land first — characters / status entries
     // reference them by name and the import resolves to local ids.
+    // Keyed by (name, series) so a status that exists both globally
+    // and scoped to a series can coexist.
     onProgress?.call('Importing custom statuses');
-    final customStatusIdByName = <String, int>{};
+    String customKey(String name, String? series) =>
+        '${name.toLowerCase()}|${(series ?? '').toLowerCase()}';
+    final customStatusIdByKey = <String, int>{};
     {
       final existing = await _characters.listCustomStatuses();
       for (final cs in existing) {
-        customStatusIdByName[cs.name.toLowerCase()] = cs.id!;
+        customStatusIdByKey[customKey(cs.name, cs.series)] = cs.id!;
       }
       for (final entry in (manifest['custom_statuses'] as List? ?? const [])
           .cast<Map<String, dynamic>>()) {
         final name = entry['name'] as String;
-        if (customStatusIdByName.containsKey(name.toLowerCase())) continue;
+        final series = entry['series'] as String?;
+        if (customStatusIdByKey.containsKey(customKey(name, series))) {
+          continue;
+        }
         final id = await _characters.createCustomStatus(
           name: name,
           colorArgb: (entry['color'] as num).toInt(),
+          series: series,
         );
-        customStatusIdByName[name.toLowerCase()] = id;
+        customStatusIdByKey[customKey(name, series)] = id;
       }
+    }
+    // Lookup a custom status by name, preferring a series-scoped row
+    // matching the calling character's series, and falling back to the
+    // global one. Returns null when nothing matches — the caller then
+    // skips the custom-id pointer and the built-in placeholder applies.
+    int? lookupCustom(String? name, String? series) {
+      if (name == null) return null;
+      final scoped = customStatusIdByKey[customKey(name, series)];
+      if (scoped != null) return scoped;
+      return customStatusIdByKey[customKey(name, null)];
     }
 
     // Affiliations are a tree — create rows first, then set parents
@@ -528,9 +546,7 @@ class BookBundleService {
             CharacterStatus.alive;
         final defaultCustomName =
             c['default_custom_status_name'] as String?;
-        final customId = defaultCustomName != null
-            ? customStatusIdByName[defaultCustomName.toLowerCase()]
-            : null;
+        final customId = lookupCustom(defaultCustomName, series);
         if (defaultStatusName != null || customId != null) {
           await _characters.setDefaultStatus(
             characterId: characterId,
@@ -628,9 +644,7 @@ class BookBundleService {
               CharacterStatus.fromName(entry['status'] as String?) ??
                   CharacterStatus.alive;
           final customName = entry['custom_status_name'] as String?;
-          final customId = customName != null
-              ? customStatusIdByName[customName.toLowerCase()]
-              : null;
+          final customId = lookupCustom(customName, series);
           final entryBookLocal =
               (entry['book_local_id'] as num?)?.toInt();
           final entryBookId = entryBookLocal != null
@@ -902,13 +916,15 @@ class BookBundleService {
     return result;
   }
 
-  /// Custom statuses are global (not series-scoped) so we export the
-  /// whole table — the import side de-dupes by name.
+  /// Custom statuses can be global or scoped to a series — both are
+  /// exported in full so the import side can recreate them with the
+  /// same scope. De-duplication on import keys on (name, series).
   Future<List<Map<String, dynamic>>> _collectCustomStatusesJson() async {
     final all = await _characters.listCustomStatuses();
     return all
         .map((c) => {
               'name': c.name,
+              'series': c.series,
               'color': c.colorArgb,
               'created_at': c.createdAt.millisecondsSinceEpoch,
             })

@@ -50,8 +50,17 @@ class _CharacterStatusEditorState extends ConsumerState<CharacterStatusEditor> {
     final entries = character.id == null
         ? const AsyncValue<List<CharacterStatusEntry>>.data([])
         : ref.watch(statusEntriesForCharacterProvider(character.id!));
-    final customsAsync = ref.watch(customStatusesProvider);
-    final customs = customsAsync.maybeWhen(
+    // Display lookups need every custom (a saved entry might point at
+    // a row from another series) — but the picker only offers the
+    // ones in scope for this character.
+    final allCustomsAsync = ref.watch(customStatusesProvider);
+    final allCustoms = allCustomsAsync.maybeWhen(
+      data: (list) => list,
+      orElse: () => const <CustomStatus>[],
+    );
+    final scopedCustomsAsync =
+        ref.watch(customStatusesForScopeProvider(character.series));
+    final scopedCustoms = scopedCustomsAsync.maybeWhen(
       data: (list) => list,
       orElse: () => const <CustomStatus>[],
     );
@@ -71,7 +80,7 @@ class _CharacterStatusEditorState extends ConsumerState<CharacterStatusEditor> {
     final display = statusDisplayFor(
       builtIn: resolvedValue.status,
       customId: resolvedValue.customStatusId,
-      customs: customs,
+      customs: allCustoms,
     );
     final position = ref.watch(currentReaderPositionProvider);
     return Column(
@@ -100,7 +109,7 @@ class _CharacterStatusEditorState extends ConsumerState<CharacterStatusEditor> {
               label: const Text('Add change'),
               onPressed: character.id == null
                   ? null
-                  : () => _showAddEntry(customs),
+                  : () => _showAddEntry(scopedCustoms),
             ),
           ],
         ),
@@ -121,7 +130,8 @@ class _CharacterStatusEditorState extends ConsumerState<CharacterStatusEditor> {
               entries: [synthetic, ...list],
               position: position,
               character: character,
-              customs: customs,
+              customs: allCustoms,
+              scopedCustoms: scopedCustoms,
             );
           },
         ),
@@ -184,12 +194,21 @@ class _TimelineList extends ConsumerWidget {
     required this.position,
     required this.character,
     required this.customs,
+    required this.scopedCustoms,
   });
 
   final List<CharacterStatusEntry> entries;
   final ReaderPosition? position;
   final Character character;
+
+  /// Every custom in the database — used so a saved entry's color/
+  /// label resolves even when the row's series is different from
+  /// this character's. Display lookup only.
   final List<CustomStatus> customs;
+
+  /// Customs available to *pick* for this character (globals +
+  /// matching series). Used by the edit-default sheet's chip grid.
+  final List<CustomStatus> scopedCustoms;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -217,6 +236,7 @@ class _TimelineList extends ConsumerWidget {
               entry: e,
               character: character,
               customs: customs,
+              scopedCustoms: scopedCustoms,
             ),
         ],
       ),
@@ -246,10 +266,12 @@ class _StatusEntryRow extends ConsumerWidget {
     required this.entry,
     required this.character,
     required this.customs,
+    required this.scopedCustoms,
   });
   final CharacterStatusEntry entry;
   final Character character;
   final List<CustomStatus> customs;
+  final List<CustomStatus> scopedCustoms;
 
   bool get _isSynthetic => entry.id == null;
 
@@ -335,7 +357,8 @@ class _StatusEntryRow extends ConsumerWidget {
         child: _DefaultStatusSheet(
           initialStatus: character.status,
           initialCustomId: character.statusCustomId,
-          customs: customs,
+          customs: scopedCustoms,
+          characterSeries: character.series,
         ),
       ),
     );
@@ -734,6 +757,7 @@ class _StatusEntrySheetState extends State<_StatusEntrySheet> {
               builtIn: _customId == null ? _status : null,
               customId: _customId,
               customs: widget.customs,
+              characterSeries: widget.characterSeries,
               onPickBuiltIn: (s) => setState(() {
                 _status = s;
                 _customId = null;
@@ -1069,10 +1093,15 @@ class _DefaultStatusSheet extends StatefulWidget {
     required this.initialStatus,
     required this.initialCustomId,
     required this.customs,
+    required this.characterSeries,
   });
   final CharacterStatus initialStatus;
   final int? initialCustomId;
   final List<CustomStatus> customs;
+
+  /// Series of the character being edited — passed to the chip grid
+  /// so the "+ New status" sheet can pre-fill its scope.
+  final String? characterSeries;
 
   @override
   State<_DefaultStatusSheet> createState() => _DefaultStatusSheetState();
@@ -1104,6 +1133,7 @@ class _DefaultStatusSheetState extends State<_DefaultStatusSheet> {
               builtIn: _customId == null ? _status : null,
               customId: _customId,
               customs: widget.customs,
+              characterSeries: widget.characterSeries,
               onPickBuiltIn: (s) => setState(() {
                 _status = s;
                 _customId = null;
@@ -1144,10 +1174,16 @@ class _StatusChipGrid extends ConsumerWidget {
     required this.builtIn,
     required this.customId,
     required this.customs,
+    required this.characterSeries,
     required this.onPickBuiltIn,
     required this.onPickCustom,
     required this.onCreatedCustom,
   });
+
+  /// Default series suggested in the "+ New status" creation sheet.
+  /// Null means the picker is opened from a global character; new
+  /// statuses default to global in that case.
+  final String? characterSeries;
 
   /// The built-in enum that's currently selected, or null when a
   /// custom row is selected instead.
@@ -1190,8 +1226,11 @@ class _StatusChipGrid extends ConsumerWidget {
           avatar: const Icon(Icons.add, size: 16),
           label: const Text('New status'),
           onPressed: () async {
-            final id =
-                await showCreateCustomStatusSheet(context, ref);
+            final id = await showCreateCustomStatusSheet(
+              context,
+              ref,
+              defaultSeries: characterSeries,
+            );
             if (id != null) onCreatedCustom(id);
           },
         ),
@@ -1235,8 +1274,9 @@ class _StatusChip extends StatelessWidget {
 /// the new row's id, or null if the user cancelled.
 Future<int?> showCreateCustomStatusSheet(
   BuildContext context,
-  WidgetRef ref,
-) async {
+  WidgetRef ref, {
+  String? defaultSeries,
+}) async {
   final picked = await showModalBottomSheet<CustomStatusEdit>(
     context: context,
     isScrollControlled: true,
@@ -1245,13 +1285,14 @@ Future<int?> showCreateCustomStatusSheet(
       padding: EdgeInsets.only(
         bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
       ),
-      child: const _CreateCustomStatusSheet(),
+      child: _CreateCustomStatusSheet(initialSeries: defaultSeries),
     ),
   );
   if (picked == null) return null;
   final id = await ref.read(characterRepositoryProvider).createCustomStatus(
         name: picked.name,
         colorArgb: picked.colorArgb,
+        series: picked.series,
       );
   ref.read(characterRevisionProvider.notifier).state++;
   return id;
@@ -1263,6 +1304,7 @@ Future<CustomStatusEdit?> showEditCustomStatusSheet(
   BuildContext context, {
   required String initialName,
   required int initialColorArgb,
+  String? initialSeries,
 }) {
   return showModalBottomSheet<CustomStatusEdit>(
     context: context,
@@ -1275,6 +1317,7 @@ Future<CustomStatusEdit?> showEditCustomStatusSheet(
       child: _CreateCustomStatusSheet(
         initialName: initialName,
         initialColorArgb: initialColorArgb,
+        initialSeries: initialSeries,
         editing: true,
       ),
     ),
@@ -1284,9 +1327,14 @@ Future<CustomStatusEdit?> showEditCustomStatusSheet(
 /// Result returned by [_CreateCustomStatusSheet] for both create and
 /// edit modes. Public so the manage screen can consume it.
 class CustomStatusEdit {
-  const CustomStatusEdit({required this.name, required this.colorArgb});
+  const CustomStatusEdit({
+    required this.name,
+    required this.colorArgb,
+    this.series,
+  });
   final String name;
   final int colorArgb;
+  final String? series;
 }
 
 /// The 12-color palette for custom statuses. Picked to be bright
@@ -1311,11 +1359,13 @@ class _CreateCustomStatusSheet extends StatefulWidget {
   const _CreateCustomStatusSheet({
     this.initialName,
     this.initialColorArgb,
+    this.initialSeries,
     this.editing = false,
   });
 
   final String? initialName;
   final int? initialColorArgb;
+  final String? initialSeries;
   final bool editing;
 
   @override
@@ -1328,6 +1378,24 @@ class _CreateCustomStatusSheetState extends State<_CreateCustomStatusSheet> {
       TextEditingController(text: widget.initialName ?? '');
   late int _colorArgb =
       widget.initialColorArgb ?? _customStatusPalette.first;
+  late String? _series = widget.initialSeries;
+  late final Future<List<String>> _seriesOptions = _loadSeries();
+
+  Future<List<String>> _loadSeries() async {
+    final all = await BookRepository().getAll();
+    final set = <String>{};
+    for (final b in all) {
+      final s = b.series?.trim();
+      if (s != null && s.isNotEmpty) set.add(s);
+    }
+    final list = set.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    // Make sure the initial value is in the list even if no book uses
+    // it yet (e.g. user created one for an unloaded series).
+    final initial = widget.initialSeries;
+    if (initial != null && !list.contains(initial)) list.add(initial);
+    return list;
+  }
 
   @override
   void dispose() {
@@ -1360,6 +1428,37 @@ class _CreateCustomStatusSheetState extends State<_CreateCustomStatusSheet> {
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
+            ),
+            const SizedBox(height: 12),
+            FutureBuilder<List<String>>(
+              future: _seriesOptions,
+              builder: (_, snap) {
+                final options = snap.data ?? const <String>[];
+                return DropdownButtonFormField<String?>(
+                  initialValue: _series,
+                  decoration: const InputDecoration(
+                    labelText: 'Scope',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Global — every character'),
+                    ),
+                    for (final s in options)
+                      DropdownMenuItem<String?>(
+                        value: s,
+                        child: Text(
+                          s,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _series = v),
+                );
+              },
             ),
             const SizedBox(height: 16),
             Text(
@@ -1408,7 +1507,11 @@ class _CreateCustomStatusSheetState extends State<_CreateCustomStatusSheet> {
                     if (name.isEmpty) return;
                     Navigator.pop(
                       context,
-                      CustomStatusEdit(name: name, colorArgb: _colorArgb),
+                      CustomStatusEdit(
+                        name: name,
+                        colorArgb: _colorArgb,
+                        series: _series,
+                      ),
                     );
                   },
                   child: Text(widget.editing ? 'Save' : 'Create'),

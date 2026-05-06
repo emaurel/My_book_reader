@@ -233,11 +233,22 @@ final hiddenCharacterIdsForReaderProvider =
 /// the user can audit their own database.
 final revealHiddenCharactersProvider = StateProvider<bool>((_) => false);
 
-/// Every user-defined custom status. Watched by the status pickers and
-/// dot/label renderers so the UI updates as soon as the user adds /
-/// edits / deletes a custom status.
+/// Every user-defined custom status — used for display lookups (a
+/// saved entry might point at a custom row from any series, and we
+/// need to be able to render it whoever is looking).
 final customStatusesProvider =
     FutureProvider<List<CustomStatus>>((ref) {
   ref.watch(characterRevisionProvider);
   return ref.watch(characterRepositoryProvider).listCustomStatuses();
+});
+
+/// Custom statuses *available to pick* for a character in [series]:
+/// globals plus matching-series rows. Drives the chip picker. Display
+/// lookups still go via [customStatusesProvider] above.
+final customStatusesForScopeProvider =
+    FutureProvider.family<List<CustomStatus>, String?>((ref, series) {
+  ref.watch(characterRevisionProvider);
+  return ref
+      .watch(characterRepositoryProvider)
+      .listCustomStatusesForScope(series);
 });
